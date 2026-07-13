@@ -1,0 +1,38 @@
+{
+"high_value": [
+
+"vintage",
+"tube",
+"estate",
+"garage",
+"moving",
+"must go",
+"old",
+"rare",
+"collector",
+"professional",
+"studio",
+"industrial"
+
+],
+
+"repair": [
+
+"broken",
+"untested",
+"parts",
+"repair",
+"needs work",
+"doesn't work"
+
+],
+
+"danger":
+
+[
+"fake",
+"replica",
+"case only"
+]
+
+}
