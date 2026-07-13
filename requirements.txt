@@ -1,5 +1,2 @@
-requests
-beautifulsoup4
-lxml
-python-dotenv
-discord-webhook
+# This file is kept for compatibility with existing tooling.
+# Prefer uv and pyproject.toml for dependency management.
