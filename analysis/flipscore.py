@@ -4,194 +4,343 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
 from analysis.keywords import keyword_score
+from categories import get_category
+from config.settings import settings
 
 
 @dataclass(frozen=True)
-class RuleResult:
-    """Outcome of a single scoring rule."""
+class ComponentResult:
+    """Outcome of an individual scoring component."""
 
     name: str
-    points: float
-    reason: str
+    score: float  # 0 to 100
+    explanation: str
 
 
-class ScoringRule:
-    """Base interface for an individual FlipScore rule."""
+class ScoreComponent:
+    """Base interface for an individual FlipScore component."""
 
-    name = "rule"
-    description = "Base scoring rule"
+    name = "component"
+    description = "Base scoring component"
 
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
         raise NotImplementedError
 
 
-class PriceRule(ScoringRule):
-    """Rewards listings that appear to be priced aggressively for a flip."""
+class PriceScore(ScoreComponent):
+    """Evaluates the listing price relative to market expectations."""
 
     name = "price"
-    description = "Rewards lower prices because they leave more room for profit."
+    description = "Rewards lower prices as they increase profit potential."
 
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
         price = float(listing.get("price", 0) or 0)
+        if price <= 0:
+            return ComponentResult(self.name, 0, "Price is missing or invalid.")
         if price < 100:
-            return RuleResult(self.name, 25, "Price is very low, which leaves room for profit.")
+            return ComponentResult(self.name, 100, "Price is very low, maximizing profit room.")
         if price < 200:
-            return RuleResult(self.name, 12, "Price is low enough to support a healthy margin.")
+            return ComponentResult(self.name, 80, "Price is low, supporting healthy margins.")
         if price < 400:
-            return RuleResult(self.name, 4, "Price is moderate but still manageable.")
-        return RuleResult(self.name, 0, "Price is high enough that margin may be compressed.")
+            return ComponentResult(self.name, 50, "Price is moderate but manageable.")
+        if price < 1000:
+            return ComponentResult(self.name, 30, "Price is high, narrowing potential margins.")
+        return ComponentResult(self.name, 10, "Price is very high, significantly compressing margin.")
 
 
-class CategoryRule(ScoringRule):
-    """Rewards categories that tend to be frequent flip opportunities."""
+class DemandScore(ScoreComponent):
+    """Estimates market demand based on category, keywords, and brand."""
 
-    name = "category"
-    description = "Rewards categories that are known to be good flip candidates."
+    name = "demand"
+    description = "High demand improves liquidity and resale speed."
 
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
         category = str(listing.get("category", "") or "").strip().lower()
-        if category in {"electronics", "games", "collectibles", "home goods"}:
-            return RuleResult(self.name, 15, f"Category '{category}' is a strong flip category.")
-        if category in {"tools", "apparel", "furniture"}:
-            return RuleResult(self.name, 8, f"Category '{category}' has some flip demand.")
-        return RuleResult(self.name, 0, "Category is not clearly associated with strong flip demand.")
+        knowledge = get_category(category)
+        
+        keyword_val = listing.get("keyword_score")
+        if keyword_val is None:
+            text = " ".join([str(listing.get("title", "") or ""), str(listing.get("description", "") or "")]).strip()
+            keyword_val = keyword_score(text) if text else 0
+            
+        brand_val = float(listing.get("brand_score", 0) or 0)
+        
+        # Combine signals
+        score = 0.0
+        reasons = []
+        
+        if knowledge and knowledge.typical_margins.midpoint >= 0.25:
+            score += 40
+            reasons.append(f"Category '{category}' has historically strong demand.")
+        elif knowledge:
+            score += 20
+            reasons.append(f"Category '{category}' has moderate demand signals.")
+            
+        if keyword_val >= 70:
+            score += 40
+            reasons.append("High-value keywords suggest strong alignment with buyer intent.")
+        elif keyword_val >= 40:
+            score += 20
+            reasons.append("Moderate keyword matches indicate reasonable demand.")
+            
+        if brand_val >= 80:
+            score += 20
+            reasons.append("Strong brand recognition boosts resale confidence.")
+        elif brand_val >= 50:
+            score += 10
+            reasons.append("Decent brand presence adds some value.")
+            
+        final_score = min(100, score)
+        explanation = " ".join(reasons) if reasons else "No clear demand signals were detected."
+        return ComponentResult(self.name, final_score, explanation)
 
 
-class KeywordRule(ScoringRule):
-    """Rewards listings with strong keyword matches from the keyword analysis module."""
+class SellerScore(ScoreComponent):
+    """Evaluates seller factors like motivation and listing freshness."""
 
-    name = "keyword"
-    description = "Rewards listings that match high-value keywords."
+    name = "seller"
+    description = "Motivated sellers and fresh listings often lead to better deals."
 
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
-        keyword_score_value = listing.get("keyword_score")
-        if keyword_score_value is None:
-            text = " ".join(
-                [str(listing.get("title", "") or ""), str(listing.get("description", "") or "")]
-            ).strip()
-            keyword_score_value = keyword_score(text) if text else 0
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
+        motivation = str(listing.get("seller_motivation", "") or "").strip().lower()
+        age = float(listing.get("listing_age", 999) or 999)
+        
+        score = 50.0 # Neutral starting point
+        reasons = []
+        
+        if any(term in motivation for term in ["must sell", "urgent", "moving", "cash", "urgently"]):
+            score += 30
+            reasons.append("Seller appears highly motivated.")
+        elif motivation:
+            score += 10
+            reasons.append("Seller motivation is present.")
+            
+        if age <= 2:
+            score += 20
+            reasons.append("Listing is very fresh, suggesting high availability.")
+        elif age <= 7:
+            score += 10
+            reasons.append("Listing is relatively recent.")
+        else:
+            score -= 10
+            reasons.append("Listing is older and may be stale.")
+            
+        final_score = max(0, min(100, score))
+        explanation = " ".join(reasons) if reasons else "Seller signals are neutral."
+        return ComponentResult(self.name, final_score, explanation)
 
-        if keyword_score_value >= 70:
-            return RuleResult(self.name, 20, "Keyword score is strong, suggesting the listing aligns with demand.")
-        if keyword_score_value >= 40:
-            return RuleResult(self.name, 10, "Keyword score is moderate and may indicate a good fit.")
-        return RuleResult(self.name, 0, "Keyword score is weak, so the listing is less likely to be attractive.")
+
+class RiskScore(ScoreComponent):
+    """Assesses potential risks like fraud, condition issues, or lack of info."""
+
+    name = "risk"
+    description = "Higher risk scores indicate lower overall safety/confidence in the flip."
+
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
+        # We'll invert this: 100 is low risk (safe), 0 is high risk (danger)
+        repair_indicators = listing.get("repair_indicators", []) or []
+        if isinstance(repair_indicators, str):
+            repair_indicators = [repair_indicators]
+            
+        has_suspicious_terms = any(term in str(listing.get("description", "")).lower() for term in ["no returns", "as is", "untested"])
+        
+        score = 80.0 # Start relatively safe
+        reasons = []
+        
+        if repair_indicators:
+            score -= 30
+            reasons.append("Known repair issues increase implementation risk.")
+            
+        if has_suspicious_terms:
+            score -= 20
+            reasons.append("Seller terms ('as-is', 'untested') increase risk.")
+            
+        if not listing.get("description"):
+            score -= 10
+            reasons.append("Lack of listing description increases uncertainty.")
+            
+        final_score = max(0, min(100, score))
+        explanation = " ".join(reasons) if reasons else "No major risk factors detected."
+        return ComponentResult(self.name, final_score, explanation)
 
 
-class BrandRule(ScoringRule):
-    """Rewards strong brand signals because premium brand names often sell faster."""
-
-    name = "brand"
-    description = "Rewards listings with strong brand recognition."
-
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
-        brand_score_value = float(listing.get("brand_score", 0) or 0)
-        if brand_score_value >= 80:
-            return RuleResult(self.name, 15, "Brand score is strong, which should improve resale demand.")
-        if brand_score_value >= 60:
-            return RuleResult(self.name, 8, "Brand score is decent and adds some confidence.")
-        return RuleResult(self.name, 0, "Brand score is not strong enough to boost the valuation.")
-
-
-class DistanceRule(ScoringRule):
-    """Rewards listings that are close enough to be practical to inspect or collect."""
+class DistanceScore(ScoreComponent):
+    """Evaluates the logistical cost and effort of acquisition."""
 
     name = "distance"
-    description = "Rewards nearby listings because they are easier to acquire."
+    description = "Proximity reduces overhead and increases the likelihood of a successful pickup."
 
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
         distance = float(listing.get("distance", 999) or 999)
         if distance <= 5:
-            return RuleResult(self.name, 10, "Distance is close, so the pickup is practical.")
+            return ComponentResult(self.name, 100, "Very close; acquisition is highly convenient.")
         if distance <= 15:
-            return RuleResult(self.name, 5, "Distance is reasonable and still manageable.")
-        return RuleResult(self.name, 0, "Distance is far, which increases friction.")
+            return ComponentResult(self.name, 75, "Reasonable distance; acquisition is practical.")
+        if distance <= 30:
+            return ComponentResult(self.name, 40, "Significant distance; increases acquisition overhead.")
+        return ComponentResult(self.name, 10, "Far distance; acquisition may be impractical.")
 
 
-class ListingAgeRule(ScoringRule):
-    """Rewards fresh listings because they are less stale and may have better urgency."""
+class RepairScore(ScoreComponent):
+    """Specifically evaluates the difficulty and impact of required repairs."""
 
-    name = "listing_age"
-    description = "Rewards recent listings that have not gone stale."
+    name = "repair"
+    description = "Items needing repair are higher effort but may offer steeper discounts."
 
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
-        age = float(listing.get("listing_age", 999) or 999)
-        if age <= 2:
-            return RuleResult(self.name, 8, "Listing is recent, which is usually a better signal.")
-        if age <= 7:
-            return RuleResult(self.name, 4, "Listing is somewhat recent and may still be active.")
-        return RuleResult(self.name, 0, "Listing is old enough that the window may be closing.")
-
-
-class SellerMotivationRule(ScoringRule):
-    """Rewards listings where the seller signals urgency or a strong reason to sell."""
-
-    name = "seller_motivation"
-    description = "Rewards seller urgency because motivated sellers often accept lower offers."
-
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
-        motivation = str(listing.get("seller_motivation", "") or "").strip().lower()
-        if any(term in motivation for term in ["must sell", "urgent", "moving", "cash", "urgently"]):
-            return RuleResult(self.name, 8, "Seller appears motivated, which may support a lower offer.")
-        if motivation:
-            return RuleResult(self.name, 3, "Seller motivation is present but not clearly urgent.")
-        return RuleResult(self.name, 0, "No seller motivation signal was provided.")
-
-
-class RepairIndicatorsRule(ScoringRule):
-    """Penalizes listings with obvious repair issues that reduce resale confidence."""
-
-    name = "repair_indicators"
-    description = "Penalizes visible damage or repair concerns."
-
-    def apply(self, listing: dict[str, Any]) -> RuleResult:
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
         indicators = listing.get("repair_indicators", []) or []
         if isinstance(indicators, str):
             indicators = [indicators]
-
+            
         if not indicators:
-            return RuleResult(self.name, 0, "No repair indicators were observed.")
-
-        normalized = [str(item).strip().lower() for item in indicators if str(item).strip()]
-        if any(keyword in " ".join(normalized) for keyword in ["cracked", "broken", "battery", "water", "screen", "repair"]):
-            return RuleResult(self.name, -8, "Repair indicators suggest the item may need work or have reduced resale value.")
-        return RuleResult(self.name, -2, "Some concerns were noted, though they are not clearly repair-related.")
-
-
-DEFAULT_RULES: tuple[ScoringRule, ...] = (
-    PriceRule(),
-    CategoryRule(),
-    KeywordRule(),
-    BrandRule(),
-    DistanceRule(),
-    ListingAgeRule(),
-    SellerMotivationRule(),
-    RepairIndicatorsRule(),
-)
+            return ComponentResult(self.name, 100, "No repair issues detected.")
+            
+        text = " ".join([str(i).lower() for i in indicators])
+        if any(kw in text for kw in ["broken", "shattered", "water", "parts"]):
+            return ComponentResult(self.name, 20, "Significant repairs likely required.")
+        if any(kw in text for kw in ["battery", "cracked", "scratched", "worn"]):
+            return ComponentResult(self.name, 50, "Minor or cosmetic repairs may be needed.")
+            
+        return ComponentResult(self.name, 70, "Unknown or ambiguous repair indicators present.")
 
 
-def evaluate_listing(listing: dict[str, Any], rules: Iterable[ScoringRule] | None = None) -> dict[str, Any]:
-    """Evaluate a listing and return a score, confidence, and human-readable reasons."""
+class SeasonalityScore(ScoreComponent):
+    """Estimates how much current seasonal trends affect this item's value."""
 
-    rule_list = tuple(rules or DEFAULT_RULES)
-    results = [rule.apply(listing) for rule in rule_list]
-    total_points = sum(result.points for result in results)
-    score = max(0, min(100, int(round(50 + total_points))))
+    name = "seasonality"
+    description = "Items sold in-season usually command higher prices and faster sales."
 
-    active_results = [result for result in results if result.points != 0]
-    signal_count = len(active_results)
-    field_count = sum(1 for key in listing if listing.get(key) not in (None, "", [], {}, ()) and key not in {"title", "description"})
-    confidence = min(1.0, 0.35 + 0.08 * signal_count + 0.01 * field_count)
-
-    reasons = [result.reason for result in results if result.reason]
-    return {
-        "score": score,
-        "confidence": round(confidence, 2),
-        "reasons": reasons,
-    }
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
+        # Placeholder logic: for now, assume neutral unless we have seasonal data
+        # In a real app, this would check the current month vs category popularity
+        return ComponentResult(self.name, 50, "Seasonal data is currently neutral for this category.")
 
 
-def calculate(listing: dict[str, Any], rules: Iterable[ScoringRule] | None = None) -> dict[str, Any]:
+class ConfidenceScore(ScoreComponent):
+    """Measures the quality and quantity of data used to generate the score."""
+
+    name = "confidence"
+    description = "Higher confidence indicates more reliable data signals."
+
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
+        field_count = sum(1 for key in listing if listing.get(key) not in (None, "", [], {}, ()) and key not in {"title", "description"})
+        
+        # Scale 0 to 100
+        score = min(100, 20 + (field_count * 10))
+        
+        explanation = f"Calculated based on {field_count} active data fields."
+        return ComponentResult(self.name, score, explanation)
+
+
+class CompetitionScore(ScoreComponent):
+    """Estimates how much competition exists for this listing/category."""
+
+    name = "competition"
+    description = "Lower competition means you have more time and leverage."
+
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
+        # Placeholder: could be based on listing views, or how many other similar listings exist
+        views = int(listing.get("view_count", 0) or 0)
+        if views > 100:
+            return ComponentResult(self.name, 20, "High view count suggests high competition.")
+        if views > 20:
+            return ComponentResult(self.name, 60, "Moderate view count suggests some interest.")
+        return ComponentResult(self.name, 90, "Low view count suggests a potentially overlooked opportunity.")
+
+
+class HistoricalScore(ScoreComponent):
+    """Compares the listing against historical performance data."""
+
+    name = "historical"
+    description = "Items with strong historical flip performance are rated higher."
+
+    def calculate(self, listing: dict[str, Any]) -> ComponentResult:
+        # Placeholder: would query historical DB
+        return ComponentResult(self.name, 50, "No historical performance data available for this specific item.")
+
+
+class ScoringPipeline:
+    """Combines multiple score components using configurable weights."""
+
+    def __init__(self, components: list[ScoreComponent], weights: dict[str, float] | None = None):
+        self.components = components
+        self.weights = weights or {c.name: 1.0 for c in components}
+
+    def evaluate(self, listing: dict[str, Any]) -> dict[str, Any]:
+        results = {}
+        total_weighted_score = 0.0
+        total_weight = 0.0
+        
+        for component in self.components:
+            res = component.calculate(listing)
+            weight = self.weights.get(component.name, 1.0)
+            
+            results[component.name] = {
+                "score": res.score,
+                "explanation": res.explanation,
+                "weight": weight
+            }
+            
+            total_weighted_score += res.score * weight
+            total_weight += weight
+            
+        overall_score = total_weighted_score / total_weight if total_weight > 0 else 0
+        
+        # Confidence is special, it's one of the components but also a top-level return
+        confidence_res = results.get("confidence", {"score": 50})
+        confidence = confidence_res["score"] / 100.0
+        
+        return {
+            "score": int(round(overall_score)),
+            "confidence": round(confidence, 2),
+            "component_scores": results,
+            "reasons": [res["explanation"] for res in results.values() if res["explanation"]],
+        }
+
+
+DEFAULT_COMPONENTS = [
+    PriceScore(),
+    DemandScore(),
+    SellerScore(),
+    RiskScore(),
+    DistanceScore(),
+    RepairScore(),
+    SeasonalityScore(),
+    ConfidenceScore(),
+    CompetitionScore(),
+    HistoricalScore(),
+]
+
+# We will load these from settings in the evaluate_listing function
+DEFAULT_WEIGHTS = {
+    "price": 2.0,
+    "demand": 1.5,
+    "seller": 1.0,
+    "risk": 1.5,
+    "distance": 0.8,
+    "repair": 1.0,
+    "seasonality": 0.5,
+    "confidence": 0.5,
+    "competition": 0.7,
+    "historical": 0.5,
+}
+
+
+def evaluate_listing(
+    listing: dict[str, Any],
+    components: list[ScoreComponent] | None = None,
+    weights: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Evaluate a listing using the modular scoring pipeline."""
+
+    comp_list = components or DEFAULT_COMPONENTS
+    weight_dict = weights or settings.flipscore_weights or DEFAULT_WEIGHTS
+
+    pipeline = ScoringPipeline(comp_list, weight_dict)
+    return pipeline.evaluate(listing)
+
+
+def calculate(listing: dict[str, Any]) -> dict[str, Any]:
     """Backward-compatible wrapper around the modular evaluator."""
 
-    return evaluate_listing(listing, rules=rules)
+    return evaluate_listing(listing)

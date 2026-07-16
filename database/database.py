@@ -5,7 +5,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import DATABASE
-from database.models import Listing  # noqa: F401
+from database.models import Listing, Queue  # noqa: F401
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent

@@ -12,6 +12,7 @@ The core domain model for MAIE is centered around listings discovered from marke
 - PriceHistory: snapshots of listing prices over time.
 - Search: the search or collection context that surfaced the listing.
 - Opportunity: a calculated arbitrage or profit opportunity tied to a listing.
+- Queue: the manual-review record for an opportunity; it must be approved before notification.
 - Purchase: the final acquisition record for a listing when it has been purchased.
 
 ## Design principles

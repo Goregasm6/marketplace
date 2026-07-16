@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
+from core.plugins import NotificationPlugin
+
 
 @dataclass
 class AlertNotification:
@@ -18,7 +20,7 @@ class AlertNotification:
     listing_url: str
 
 
-class Notification:
+class Notification(NotificationPlugin):
     """Base interface for notification providers."""
 
     def send(self, alert: AlertNotification) -> None:

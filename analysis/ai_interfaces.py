@@ -30,6 +30,7 @@ class AnalysisArtifacts:
     price_prediction: float | None = None
     duplicate_score: float | None = None
     recommendation: str | None = None
+    raw_data: dict[str, Any] = field(default_factory=dict)
 
 
 class AIPlugin(Protocol):

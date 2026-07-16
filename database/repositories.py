@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any, Callable, Generic, Optional, TypeVar
 from uuid import UUID
 
@@ -15,6 +16,8 @@ from database.models import (
     Opportunity,
     PriceHistory,
     Purchase,
+    Queue,
+    QueueStatus,
     Search,
     Seller,
 )
@@ -133,13 +136,24 @@ class PriceHistoryRepository(DatabaseRepository[PriceHistory]):
             return []
         logger.info("Listing price history for listing %s", listing_id)
         with self.session() as session:
-            statement = select(PriceHistory).where(PriceHistory.listing_id == listing_id)
+            statement = (
+                select(PriceHistory)
+                .where(PriceHistory.listing_id == listing_id)
+                .order_by(PriceHistory.observed_at, PriceHistory.created_at)
+            )
             return list(session.exec(statement).all())
 
 
 class OpportunityRepository(DatabaseRepository[Opportunity]):
     def __init__(self, database_url: Optional[str] = None, *, session: Optional[Session] = None) -> None:
         super().__init__(Opportunity, database_url=database_url, session=session)
+
+    def create(self, instance: Opportunity) -> Opportunity:
+        """Persist an opportunity and place it in manual review immediately."""
+        opportunity = super().create(instance)
+        if opportunity.id is not None:
+            QueueRepository(self.database_url, session=self._session).enqueue(opportunity.id)
+        return opportunity
 
     def list_for_listing(self, listing_id: UUID | str | None) -> list[Opportunity]:
         if listing_id is None:
@@ -148,6 +162,56 @@ class OpportunityRepository(DatabaseRepository[Opportunity]):
         with self.session() as session:
             statement = select(Opportunity).where(Opportunity.listing_id == listing_id)
             return list(session.exec(statement).all())
+
+
+class QueueRepository(DatabaseRepository[Queue]):
+    """Persist and transition opportunities through manual review."""
+
+    def __init__(self, database_url: Optional[str] = None, *, session: Optional[Session] = None) -> None:
+        super().__init__(Queue, database_url=database_url, session=session)
+
+    def list_by_status(self, status: QueueStatus) -> list[Queue]:
+        with self.session() as session:
+            statement = select(Queue).where(Queue.status == status).order_by(Queue.created_at)
+            return list(session.exec(statement).all())
+
+    def enqueue(self, opportunity_id: UUID) -> Queue:
+        """Create the single queue item for an opportunity, if needed."""
+        with self.session() as session:
+            statement = select(Queue).where(Queue.opportunity_id == opportunity_id)
+            existing = session.exec(statement).one_or_none()
+            if existing is not None:
+                return existing
+            item = Queue(opportunity_id=opportunity_id)
+            session.add(item)
+            session.flush()
+            session.refresh(item)
+            return item
+
+    def review(self, queue_id: UUID | str | None, notes: Optional[str] = None) -> Optional[Queue]:
+        return self._transition(queue_id, QueueStatus.REVIEWING, notes)
+
+    def approve(self, queue_id: UUID | str | None, notes: Optional[str] = None) -> Optional[Queue]:
+        return self._transition(queue_id, QueueStatus.APPROVED, notes)
+
+    def reject(self, queue_id: UUID | str | None, notes: Optional[str] = None) -> Optional[Queue]:
+        return self._transition(queue_id, QueueStatus.REJECTED, notes)
+
+    def archive(self, queue_id: UUID | str | None, notes: Optional[str] = None) -> Optional[Queue]:
+        return self._transition(queue_id, QueueStatus.ARCHIVED, notes)
+
+    def _transition(
+        self,
+        queue_id: UUID | str | None,
+        status: QueueStatus,
+        notes: Optional[str],
+    ) -> Optional[Queue]:
+        if queue_id is None:
+            return None
+        values: dict[str, Any] = {"status": status, "reviewed_at": datetime.now(timezone.utc)}
+        if notes is not None:
+            values["review_notes"] = notes
+        return self.update(queue_id, values)
 
 
 class PurchaseRepository(DatabaseRepository[Purchase]):

@@ -1,0 +1,44 @@
+# Repository Guidelines
+
+MAIE (Marketplace Arbitrage Intelligence Engine) is a modular Python system for marketplace monitoring and arbitrage analysis. It uses a plugin-based architecture to allow easy extension of collectors, categories, and analysis logic.
+
+## Project Structure & Module Organization
+
+The project follows a layered architecture with clear boundaries between data collection, analysis, and persistence:
+
+- **`./collectors/`**: Marketplace-specific adapters implementing the `BaseCollector` interface. They handle searching, fetching, and normalizing data.
+- **`./analysis/`**: Scoring (FlipScore), classification, and enrichment logic. Isolated from data collection.
+- **`./categories/`**: Domain-specific knowledge plugins (e.g., `electronics.py`, `tools.py`) that provide search keywords and category-specific margins.
+- **`./core/`**: Shared domain logic, plugin registry, and the runtime scheduler.
+- **`./database/`**: Persistence layer using SQLModel (operational SQLite) and DuckDB (analytics).
+- **`./analytics/`**: reporting queries and DuckDB warehouse logic.
+- **`./app/`**: CLI entry point and application wiring using Typer.
+
+## Build, Test, and Development Commands
+
+The project uses `uv` for dependency management.
+
+- **Install dependencies**: `make install` (runs `uv pip install -e ".[dev]"`)
+- **Run tests**: `make test` (runs `uv run pytest`)
+- **Lint code**: `make lint` (runs `uv run ruff check .`)
+- **Format code**: `make format` (runs `uv run ruff format .`)
+- **Run CLI**: `uv run maie --help`
+
+## Coding Style & Naming Conventions
+
+- **Tooling**: Enforced via `ruff` for linting and formatting.
+- **Typing**: Strong emphasis on type hints and Pydantic/SQLModel schemas for data validation.
+- **Concurrency**: Business logic should remain framework-agnostic where possible, with concurrency handled by the `core.scheduler`.
+- **Naming**: Follow standard Python (PEP 8) conventions. Modules should be small and focused.
+
+## Testing Guidelines
+
+- **Framework**: `pytest` is used for all tests.
+- **Location**: All tests are located in the `./tests/` directory.
+- **Execution**: Run the full suite with `make test`. To run a specific test file: `uv run pytest tests/test_filename.py`.
+- **Conventions**: Each major module should have a corresponding test file in `./tests/`.
+
+## Commit & Pull Request Guidelines
+
+- **Commit Messages**: Use concise, descriptive messages (e.g., "built the foundation", "Initial marketplace AI engine").
+- **Workflow**: Ensure `make lint` and `make test` pass before submitting any changes.

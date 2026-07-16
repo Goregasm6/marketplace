@@ -44,3 +44,32 @@ def test_run_orchestrates_the_collector_pipeline():
 def test_discover_collectors_imports_modules_from_the_package():
     collectors = discover_collectors()
     assert DummyCollector in collectors
+
+
+def test_generate_search_queries_expands_base_query_with_category_terms():
+    collector = DummyCollector()
+
+    queries = collector.generate_search_queries("marantz receiver", category="audio")
+    lowered = {query.lower() for query in queries}
+
+    assert "marantz receiver" in lowered
+    assert "maranz receiver" in lowered
+    assert "marantz receiver bundle" in lowered
+    assert "marantz receiver must sell" in lowered
+
+
+def test_generate_search_queries_returns_deduplicated_candidates():
+    collector = DummyCollector()
+
+    queries = collector.generate_search_queries("receiver", category="audio", max_queries=10)
+
+    assert len(queries) <= 10
+    assert len(set(queries)) == len(queries)
+
+
+def test_run_can_execute_expanded_search_set():
+    collector = DummyCollector()
+
+    result = collector.run("marantz receiver", expand_searches=True, category="audio")
+
+    assert result > 1

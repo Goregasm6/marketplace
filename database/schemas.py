@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from database.models import ListingStatus
+from database.models import ListingStatus, QueueStatus
 
 
 class SellerBase(BaseModel):
@@ -57,6 +57,18 @@ class ListingBase(BaseModel):
 
 
 class ListingCreate(ListingBase):
+    seller_id: Optional[UUID] = None
+    search_id: Optional[UUID] = None
+
+
+class ListingUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = None
+    source: Optional[str] = None
+    external_id: Optional[str] = None
+    url: Optional[str] = None
+    status: Optional[ListingStatus] = None
     seller_id: Optional[UUID] = None
     search_id: Optional[UUID] = None
 
@@ -120,6 +132,25 @@ class OpportunityCreate(OpportunityBase):
 class OpportunityRead(OpportunityBase):
     id: UUID
     listing_id: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class QueueBase(BaseModel):
+    status: QueueStatus = QueueStatus.NEW
+    review_notes: Optional[str] = None
+
+
+class QueueCreate(QueueBase):
+    opportunity_id: UUID
+
+
+class QueueRead(QueueBase):
+    id: UUID
+    opportunity_id: UUID
+    reviewed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

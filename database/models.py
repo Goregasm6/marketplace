@@ -15,6 +15,16 @@ class ListingStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class QueueStatus(str, Enum):
+    """Lifecycle states for an opportunity awaiting human review."""
+
+    NEW = "new"
+    REVIEWING = "reviewing"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+
+
 class BaseTimestampModel(SQLModel):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
@@ -107,6 +117,21 @@ class Opportunity(BaseTimestampModel, table=True):
     listing_id: Optional[UUID] = Field(default=None, foreign_key="listings.id", index=True)
 
     listing: Optional[Listing] = Relationship(back_populates="opportunities")
+    queue_item: Optional["Queue"] = Relationship(back_populates="opportunity")
+
+
+class Queue(BaseTimestampModel, table=True):
+    """A manually reviewed opportunity before it can be notified."""
+
+    __tablename__ = "queues"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    status: QueueStatus = Field(default=QueueStatus.NEW, index=True)
+    review_notes: Optional[str] = Field(default=None)
+    reviewed_at: Optional[datetime] = Field(default=None, index=True)
+    opportunity_id: UUID = Field(foreign_key="opportunities.id", unique=True, index=True)
+
+    opportunity: Optional[Opportunity] = Relationship(back_populates="queue_item")
 
 
 class Purchase(BaseTimestampModel, table=True):

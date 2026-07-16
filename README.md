@@ -14,6 +14,7 @@ The repository is organized around a layered architecture:
 - core: shared domain logic and reusable abstractions
 - collectors: adapters for gathering data from marketplaces
 - analysis: scoring, classification, and enrichment logic
+- analytics: isolated DuckDB warehouse snapshots and reporting queries
 - categories: domain-specific category handling
 - database: persistence and schema definitions
 - alerts: notification integrations
@@ -76,6 +77,13 @@ A sample environment file is available in .env.example.
 - Lint code:
   - `make lint`
 
+## Analytics
+
+SQLite remains the operational database. The separate DuckDB analytics
+warehouse is refreshed from a read-only SQLite connection and is never used by
+collectors or repositories. See [the analytics architecture](docs/analytics-architecture.md)
+for the boundary, refresh flow, and reporting API.
+
 ## Coding Standards
 
 - Favor small, focused modules with clear responsibilities.
@@ -93,6 +101,18 @@ This repository currently contains initial scaffolding only. Business logic and 
 
 The collector framework lives in [collectors/base.py](collectors/base.py). It defines a generic base interface for marketplace integrations that can be extended without changing the existing collector registry logic.
 
+### Intelligent search generation
+
+Collectors now expose a shared `generate_search_queries()` helper that expands a seed query into a more effective search set instead of relying on one hardcoded search string. The algorithm is intentionally lightweight and deterministic:
+
+- preserves the original query as the first candidate
+- creates token-level variants for misspellings, abbreviations, plural/singular forms, and common brand aliases
+- adds foreign-spelling alternatives when applicable
+- appends category-aware terms such as brands, keywords, model prefixes, and repair-oriented phrases from the active category knowledge module
+- boosts seller-motivation searches with phrases such as `bundle`, `must sell`, `urgent`, and `for parts`
+
+This keeps collector implementations simple while giving each marketplace adapter a richer query set to work with.
+
 Every concrete collector should:
 
 - inherit from BaseCollector
@@ -107,6 +127,82 @@ To add a new collector:
 4. Use the collector through its class or registry name.
 
 The framework is intentionally generic and does not implement any marketplace-specific behavior.
+
+## Plugin Architecture
+
+MAIE now includes a plugin system under [core/plugins](core/plugins). The system is designed so collectors, categories, analyzers, notifications, and future AI modules can register themselves automatically without modifying the repository.
+
+### Supported plugin types
+
+- CollectorPlugin for marketplace data collection
+- CategoryPlugin for category and classification logic
+- AnalyzerPlugin for scoring or enrichment workflows
+- NotificationPlugin for outbound alerts
+- FutureAIPlugin for future AI integrations
+
+Each plugin should declare metadata:
+
+- name
+- version
+- author
+- description
+- dependencies
+- capabilities
+
+### Plugin API
+
+Use the plugin registry to discover or inspect plugins:
+
+```python
+from core.plugins import PluginLoader, PluginRegistry
+
+registry = PluginRegistry()
+loader = PluginLoader(registry=registry)
+loader.discover(packages=["collectors", "analysis", "categories", "alerts"])
+
+collectors = registry.get_collectors()
+categories = registry.get_categories()
+notifications = registry.get_notifications()
+```
+
+### Category knowledge plugins
+
+Category matching and category-level flip margins are provided by discoverable
+modules under [categories](categories), not hardcoded category lists. See
+[Adding category knowledge](docs/categories.md) for the schema and a complete
+new-category example.
+
+### Third-party plugin example
+
+A third-party plugin can be built outside the repository and discovered by adding its package to the import path. For example:
+
+```python
+# my_plugin_pkg/collector.py
+from core.plugins import CollectorPlugin
+
+class MyCollector(CollectorPlugin):
+    name = "my-collector"
+    version = "1.0.0"
+    author = "Example Author"
+    description = "Collects listings from a custom marketplace"
+    dependencies = []
+    capabilities = ["search"]
+
+    def run(self, *args, **kwargs):
+        return {"status": "ok"}
+```
+
+Then the plugin can be loaded by importing the module or by adding the package to the Python path before calling the loader.
+
+```python
+from core.plugins import PluginLoader, PluginRegistry
+
+registry = PluginRegistry()
+loader = PluginLoader(registry=registry)
+loader.load_module("my_plugin_pkg.collector")
+```
+
+This keeps the core repository open for extension while allowing plugins to be shipped independently.
 
 ## Domain Model
 

@@ -25,3 +25,21 @@ estimated_value REAL DEFAULT 0,
 status TEXT DEFAULT 'new'
 
 );
+
+CREATE TABLE IF NOT EXISTS queues (
+
+id TEXT PRIMARY KEY,
+
+opportunity_id TEXT NOT NULL UNIQUE,
+
+status TEXT NOT NULL DEFAULT 'new',
+
+review_notes TEXT,
+
+reviewed_at DATETIME,
+
+created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+
+);

@@ -66,6 +66,44 @@ class Settings(BaseSettings):
         default_factory=lambda: ["electronics", "tools"],
         description="Comma-separated category slugs that should be enabled.",
     )
+    # Security
+    api_key: Optional[str] = Field(default=None, description="API key for securing the FastAPI application.")
+    secret_key: str = Field(
+        default="secret-key-change-me-in-production",
+        description="Secret key for JWT and other cryptographic operations.",
+    )
+    cors_origins: Any = Field(
+        default_factory=lambda: ["http://localhost", "http://localhost:3000", "http://localhost:8000"],
+        description="Comma-separated list of origins allowed to make cross-site requests.",
+    )
+    rate_limit_requests_per_minute: int = Field(
+        default=60, ge=1, description="Rate limit hook: requests per minute per client."
+    )
+
+    # AI Settings
+    ai_enabled: bool = Field(default=False, description="Enable AI-powered analysis features.")
+    ai_provider: str = Field(default="local", description="Primary AI provider: local, openrouter, huggingface.")
+    ai_model: str = Field(default="llama3", description="Specific model name to use for AI tasks.")
+    ai_api_key: Optional[str] = Field(default=None, description="API key for the selected AI provider.")
+    ai_base_url: Optional[str] = Field(default=None, description="Base URL for local or custom AI endpoints.")
+    ai_timeout: int = Field(default=30, ge=1, description="Timeout in seconds for AI provider requests.")
+    ai_max_retries: int = Field(default=3, ge=0, description="Maximum number of retries for failed AI requests.")
+
+    flipscore_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "price": 2.0,
+            "demand": 1.5,
+            "seller": 1.0,
+            "risk": 1.5,
+            "distance": 0.8,
+            "repair": 1.0,
+            "seasonality": 0.5,
+            "confidence": 0.5,
+            "competition": 0.7,
+            "historical": 0.5,
+        },
+        description="Weights for the modular FlipScore pipeline components.",
+    )
 
     @field_validator("sqlite_path", mode="before")
     @classmethod
@@ -83,7 +121,7 @@ class Settings(BaseSettings):
             path = (BASE_DIR / path).resolve()
         return path
 
-    @field_validator("enabled_collectors", "enabled_categories", mode="before")
+    @field_validator("enabled_collectors", "enabled_categories", "cors_origins", mode="before")
     @classmethod
     def _parse_enabled_options(cls, value: Any) -> List[str]:
         return _parse_csv_list(value)

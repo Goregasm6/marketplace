@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import re
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Iterable
+
+from core.plugins import CollectorPlugin
+
+from analysis.search import SearchGenerator
 
 
 class CollectorRegistry:
@@ -28,10 +33,22 @@ class CollectorRegistry:
         return list(cls._registry.values())
 
 
-class BaseCollector(ABC):
+class BaseCollector(CollectorPlugin, ABC):
     """Abstract base class for all marketplace collectors."""
 
     name: str | None = None
+
+    def generate_search_queries(self, query: str, *, category: str | None = None, max_queries: int = 24) -> list[str]:
+        """Expand a seed query into optimized collector searches."""
+        category_plugin = self._resolve_category(category)
+        generator = SearchGenerator(category=category_plugin)
+        return generator.generate(query, max_queries=max_queries)
+
+    def _resolve_category(self, category: str | None) -> Any | None:
+        if not category:
+            return None
+        from categories.catalog import get_category
+        return get_category(category)
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -63,21 +80,33 @@ class BaseCollector(ABC):
 
     def run(self, query: str, **kwargs: Any) -> Any:
         """Execute the full pipeline for a search query."""
-        search_results = self.search(query, **kwargs)
-        fetched_items = self.fetch(search_results, **kwargs)
+        search_queries = kwargs.get("search_queries")
+        if search_queries is None and kwargs.get("expand_searches", False):
+            search_queries = self.generate_search_queries(query, category=kwargs.get("category"))
 
-        if fetched_items is None:
-            fetched_items = []
-        elif isinstance(fetched_items, (str, bytes)):
-            fetched_items = [fetched_items]
-        elif not isinstance(fetched_items, (list, tuple, set)):
-            fetched_items = [fetched_items]
+        if search_queries is None:
+            search_queries = [query]
+        elif isinstance(search_queries, str):
+            search_queries = [search_queries]
+        elif not isinstance(search_queries, (list, tuple, set)):
+            search_queries = [search_queries]
 
-        normalized_items = []
-        for item in fetched_items:
-            normalized_item = self.normalize(item, **kwargs)
-            if self.validate(normalized_item, **kwargs):
-                normalized_items.append(normalized_item)
+        normalized_items: list[Any] = []
+        for search_query in search_queries:
+            search_results = self.search(search_query, **kwargs)
+            fetched_items = self.fetch(search_results, **kwargs)
+
+            if fetched_items is None:
+                fetched_items = []
+            elif isinstance(fetched_items, (str, bytes)):
+                fetched_items = [fetched_items]
+            elif not isinstance(fetched_items, (list, tuple, set)):
+                fetched_items = [fetched_items]
+
+            for item in fetched_items:
+                normalized_item = self.normalize(item, **kwargs)
+                if self.validate(normalized_item, **kwargs):
+                    normalized_items.append(normalized_item)
 
         return self.save(normalized_items, **kwargs)
 

@@ -46,3 +46,13 @@ def test_craigslist_save_deduplicates_items():
 
     assert len(saved) == 1
     assert saved[0].external_id == "12345"
+
+
+def test_craigslist_generate_search_queries_expands_terms():
+    collector = CraigslistCollector(obey_robots=False, request_delay=0)
+
+    queries = collector.generate_search_queries("desk", category="electronics")
+
+    assert "desk" in queries
+    assert any("bundle" in query.lower() for query in queries)
+    assert any("must sell" in query.lower() for query in queries)
