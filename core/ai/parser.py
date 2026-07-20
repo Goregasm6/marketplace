@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Optional, Type, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -50,13 +50,13 @@ class ResponseParser:
         match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        
+
         # If no block, try to find first { and last }
         start = text.find("{")
         end = text.rfind("}")
         if start != -1 and end != -1:
-            return text[start:end + 1]
-        
+            return text[start : end + 1]
+
         return text.strip()
 
     def parse_as(self, text: str, model_class: Type[T]) -> T:
@@ -74,7 +74,7 @@ class ResponseParser:
         # Common formats: comma separated, or bullet points
         if "," in text and "\n" not in text:
             return [i.strip() for i in text.split(",") if i.strip()]
-        
+
         lines = text.splitlines()
         results = []
         for line in lines:

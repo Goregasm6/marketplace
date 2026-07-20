@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from database.repositories import QueueRepository
@@ -11,8 +11,10 @@ from api.deps import get_queue_repository
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
+
 class QueueActionRequest(BaseModel):
     notes: Optional[str] = None
+
 
 @router.get("/", response_model=List[QueueRead])
 def list_queue(
@@ -24,6 +26,7 @@ def list_queue(
         return repo.list_by_status(status)
     return repo.list()
 
+
 @router.get("/{queue_id}", response_model=QueueRead)
 def get_queue_item(
     queue_id: UUID,
@@ -34,6 +37,7 @@ def get_queue_item(
     if not item:
         raise HTTPException(status_code=404, detail="Queue item not found")
     return item
+
 
 @router.post("/{queue_id}/review", response_model=QueueRead)
 def review_queue_item(
@@ -47,6 +51,7 @@ def review_queue_item(
         raise HTTPException(status_code=404, detail="Queue item not found")
     return item
 
+
 @router.post("/{queue_id}/approve", response_model=QueueRead)
 def approve_queue_item(
     queue_id: UUID,
@@ -59,6 +64,7 @@ def approve_queue_item(
         raise HTTPException(status_code=404, detail="Queue item not found")
     return item
 
+
 @router.post("/{queue_id}/reject", response_model=QueueRead)
 def reject_queue_item(
     queue_id: UUID,
@@ -70,6 +76,7 @@ def reject_queue_item(
     if not item:
         raise HTTPException(status_code=404, detail="Queue item not found")
     return item
+
 
 @router.post("/{queue_id}/archive", response_model=QueueRead)
 def archive_queue_item(

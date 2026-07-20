@@ -5,7 +5,11 @@ from typer.testing import CliRunner
 from app.main import app
 from database.database import initialize_database
 from database.models import Listing, Opportunity, Queue, QueueStatus
-from database.repositories import ListingRepository, OpportunityRepository, QueueRepository
+from database.repositories import (
+    ListingRepository,
+    OpportunityRepository,
+    QueueRepository,
+)
 
 
 def _queue_item(database_url: str) -> Queue:
@@ -62,12 +66,22 @@ def test_queue_cli_lists_and_transitions_items(tmp_path) -> None:
 
     reviewing = runner.invoke(
         app,
-        ["queue", "review", str(item.id), "--notes", "Inspecting", "--database-url", database_url],
+        [
+            "queue",
+            "review",
+            str(item.id),
+            "--notes",
+            "Inspecting",
+            "--database-url",
+            database_url,
+        ],
     )
     assert reviewing.exit_code == 0
     assert "reviewing" in reviewing.output
 
-    approved = runner.invoke(app, ["queue", "approve", str(item.id), "--database-url", database_url])
+    approved = runner.invoke(
+        app, ["queue", "approve", str(item.id), "--database-url", database_url]
+    )
     assert approved.exit_code == 0
     assert "approved" in approved.output
 
@@ -78,7 +92,13 @@ def test_queue_cli_reports_missing_item(tmp_path) -> None:
 
     result = CliRunner().invoke(
         app,
-        ["queue", "archive", "00000000-0000-0000-0000-000000000000", "--database-url", database_url],
+        [
+            "queue",
+            "archive",
+            "00000000-0000-0000-0000-000000000000",
+            "--database-url",
+            database_url,
+        ],
     )
 
     assert result.exit_code == 1

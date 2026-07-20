@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import string
-from typing import Any, Dict
+from typing import Any
 
 
 class PromptManager:
@@ -65,7 +65,7 @@ class PromptManager:
         template_str = self.TEMPLATES.get(template_name)
         if not template_str:
             raise ValueError(f"Template '{template_name}' not found.")
-        
+
         template = string.Template(template_str)
         return template.safe_substitute(**kwargs)
 

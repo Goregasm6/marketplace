@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable, Set, Optional
+from typing import Set
 
 from categories.base import CategoryKnowledge
 
@@ -71,15 +71,28 @@ class SearchGenerator:
     }
 
     REPAIR_KEYWORDS = ["repair", "broken", "untested", "parts", "needs work", "as is"]
-    BUNDLE_KEYWORDS = ["bundle", "lot", "collection", "with accessories", "complete set"]
-    SELLER_MOTIVATION = ["must go", "urgent", "moving", "estate", "garage", "cleaning out"]
+    BUNDLE_KEYWORDS = [
+        "bundle",
+        "lot",
+        "collection",
+        "with accessories",
+        "complete set",
+    ]
+    SELLER_MOTIVATION = [
+        "must go",
+        "urgent",
+        "moving",
+        "estate",
+        "garage",
+        "cleaning out",
+    ]
 
     def _load_global_keywords(self) -> None:
         """Attempt to load keywords from data/keywords.json if available."""
         try:
             import json
             import os
-            
+
             # Use absolute path relative to project root if possible, or assume it's in data/
             # For simplicity, we'll try 'data/keywords.json' first
             json_path = "data/keywords.json"
@@ -87,9 +100,13 @@ class SearchGenerator:
                 with open(json_path, "r") as f:
                     data = json.load(f)
                     if "repair" in data:
-                        self.REPAIR_KEYWORDS = list(dict.fromkeys(data["repair"] + self.REPAIR_KEYWORDS))
+                        self.REPAIR_KEYWORDS = list(
+                            dict.fromkeys(data["repair"] + self.REPAIR_KEYWORDS)
+                        )
                     if "high_value" in data:
-                        self.SELLER_MOTIVATION = list(dict.fromkeys(data["high_value"] + self.SELLER_MOTIVATION))
+                        self.SELLER_MOTIVATION = list(
+                            dict.fromkeys(data["high_value"] + self.SELLER_MOTIVATION)
+                        )
         except (ImportError, IOError, json.JSONDecodeError):
             pass
 
@@ -117,7 +134,7 @@ class SearchGenerator:
         # Start with the base query and then swap one token at a time
         candidate_queries = [base_query.lower()]
         seen_candidates = {base_query.lower()}
-        
+
         for i, variants in enumerate(token_variants):
             for variant in variants:
                 low_variant = variant.lower()
@@ -133,7 +150,7 @@ class SearchGenerator:
             for brand in self.category.brands[:2]:
                 if brand.lower() not in base_query.lower():
                     category_expansions.append(f"{base_query} {brand}".lower())
-            
+
             for keyword in self.category.keywords[:2]:
                 if keyword.lower() not in base_query.lower():
                     category_expansions.append(f"{base_query} {keyword}".lower())
@@ -141,13 +158,19 @@ class SearchGenerator:
             for prefix in self.category.common_model_prefixes[:2]:
                 category_expansions.append(f"{base_query} {prefix}".lower())
 
-        modifiers = self.REPAIR_KEYWORDS[:6] + self.BUNDLE_KEYWORDS[:3] + self.SELLER_MOTIVATION[:6]
+        modifiers = (
+            self.REPAIR_KEYWORDS[:6]
+            + self.BUNDLE_KEYWORDS[:3]
+            + self.SELLER_MOTIVATION[:6]
+        )
         if self.category:
-            modifiers = list(dict.fromkeys(modifiers + list(self.category.repair_opportunities[:5])))
+            modifiers = list(
+                dict.fromkeys(modifiers + list(self.category.repair_opportunities[:5]))
+            )
 
         modified_queries = []
         seen_modified = set()
-        
+
         # Mix modifiers with original query first
         for mod in modifiers:
             q = f"{base_query} {mod}".lower()
@@ -157,7 +180,12 @@ class SearchGenerator:
 
         # Then mix modifiers with other candidates if we have room
         for q_cand in candidate_queries[1:]:
-            if len(modified_queries) + len(candidate_queries) + len(category_expansions) >= max_queries * 2:
+            if (
+                len(modified_queries)
+                + len(candidate_queries)
+                + len(category_expansions)
+                >= max_queries * 2
+            ):
                 break
             for mod in modifiers:
                 q = f"{q_cand} {mod}".lower()
@@ -170,8 +198,13 @@ class SearchGenerator:
         ordered_results = []
         seen_final = set()
 
-        all_to_process = [base_query.lower()] + candidate_queries + category_expansions + modified_queries
-        
+        all_to_process = (
+            [base_query.lower()]
+            + candidate_queries
+            + category_expansions
+            + modified_queries
+        )
+
         for q in all_to_process:
             normalized = " ".join(q.split())
             if normalized and normalized not in seen_final:
@@ -179,7 +212,7 @@ class SearchGenerator:
                 ordered_results.append(normalized)
             if len(ordered_results) >= max_queries:
                 break
-                
+
         return ordered_results
 
     def _expand_token(self, token: str) -> Set[str]:
@@ -224,8 +257,8 @@ class SearchGenerator:
             return token[:-1] + "ies"
         if token.endswith(("s", "sh", "ch", "x", "z")):
             if token.endswith("s") and len(token) > 3 and token[-2] not in "aeiou":
-                 # already likely plural or special case, but for bus -> buses we want it
-                 pass
+                # already likely plural or special case, but for bus -> buses we want it
+                pass
             return token + "es"
         return token + "s"
 
@@ -234,7 +267,9 @@ class SearchGenerator:
             return token
         if token.endswith("ies"):
             return token[:-3] + "y"
-        if token.endswith("es") and token.endswith(("ses", "xes", "zes", "ches", "shes")):
+        if token.endswith("es") and token.endswith(
+            ("ses", "xes", "zes", "ches", "shes")
+        ):
             return token[:-2]
         if token.endswith("s") and not token.endswith("ss"):
             return token[:-1]

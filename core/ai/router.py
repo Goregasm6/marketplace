@@ -21,11 +21,13 @@ class TaskRouter:
 
     def get_provider(self, task_name: Optional[str] = None) -> BaseAIProvider:
         """Get the appropriate provider for a given task."""
-        provider_name = self.provider_overrides.get(task_name or "", self._default_provider_name)
-        
+        provider_name = self.provider_overrides.get(
+            task_name or "", self._default_provider_name
+        )
+
         if provider_name not in self._providers:
             self._providers[provider_name] = self._create_provider(provider_name)
-            
+
         return self._providers[provider_name]
 
     def _create_provider(self, name: str) -> BaseAIProvider:
@@ -35,11 +37,11 @@ class TaskRouter:
             "openrouter": OpenRouterProvider,
             "huggingface": HuggingFaceProvider,
         }
-        
+
         provider_cls = provider_classes.get(name.lower())
         if not provider_cls:
             raise ValueError(f"Unknown AI provider: {name}")
-            
+
         return provider_cls(
             model=settings.ai_model,
             api_key=settings.ai_api_key,
@@ -53,7 +55,9 @@ class TaskRouter:
         provider = self.get_provider(task_name)
         return provider.complete(prompt, **kwargs)
 
-    def execute_json_task(self, task_name: str, prompt: str, **kwargs: Any) -> Dict[str, Any]:
+    def execute_json_task(
+        self, task_name: str, prompt: str, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Execute a task expecting a JSON response."""
         provider = self.get_provider(task_name)
         return provider.generate_json(prompt, **kwargs)

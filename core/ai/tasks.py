@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from core.ai.parser import (
     OpportunityAnalysisResponse,
@@ -29,14 +29,20 @@ class AIService:
         prompt = self.prompts.get_prompt("description_cleanup", description=description)
         return self.router.execute_task("description_cleanup", prompt).strip()
 
-    def analyze_seller_motivation(self, title: str, description: str) -> SellerMotivationResponse:
-        prompt = self.prompts.get_prompt("seller_motivation", title=title, description=description)
+    def analyze_seller_motivation(
+        self, title: str, description: str
+    ) -> SellerMotivationResponse:
+        prompt = self.prompts.get_prompt(
+            "seller_motivation", title=title, description=description
+        )
         # We ask for JSON in the prompt if we want structured data
         prompt += "\n\nReturn response as JSON with keys: urgency, motivation_type, negotiable (bool), summary."
         text = self.router.execute_task("seller_motivation", prompt)
         return self.parser.parse_as(text, SellerMotivationResponse)
 
-    def classify_category(self, title: str, description: str, categories: List[str]) -> str:
+    def classify_category(
+        self, title: str, description: str, categories: List[str]
+    ) -> str:
         prompt = self.prompts.get_prompt(
             "category_classification",
             title=title,
@@ -46,12 +52,16 @@ class AIService:
         return self.router.execute_task("category_classification", prompt).strip()
 
     def estimate_repair(self, title: str, description: str) -> RepairEstimateResponse:
-        prompt = self.prompts.get_prompt("repair_estimation", title=title, description=description)
+        prompt = self.prompts.get_prompt(
+            "repair_estimation", title=title, description=description
+        )
         prompt += "\n\nReturn response as JSON with keys: needed (bool), difficulty, estimated_cost (float or null), notes."
         text = self.router.execute_task("repair_estimation", prompt)
         return self.parser.parse_as(text, RepairEstimateResponse)
 
-    def analyze_risk(self, title: str, description: str, price: float) -> RiskAnalysisResponse:
+    def analyze_risk(
+        self, title: str, description: str, price: float
+    ) -> RiskAnalysisResponse:
         prompt = self.prompts.get_prompt(
             "risk_analysis", title=title, description=description, price=price
         )
@@ -59,13 +69,20 @@ class AIService:
         text = self.router.execute_task("risk_analysis", prompt)
         return self.parser.parse_as(text, RiskAnalysisResponse)
 
-    def generate_recommendation(self, title: str, description: str, flipscore: float) -> str:
+    def generate_recommendation(
+        self, title: str, description: str, flipscore: float
+    ) -> str:
         prompt = self.prompts.get_prompt(
-            "recommendation_generation", title=title, description=description, flipscore=flipscore
+            "recommendation_generation",
+            title=title,
+            description=description,
+            flipscore=flipscore,
         )
         return self.router.execute_task("recommendation_generation", prompt).strip()
 
-    def discover_opportunities(self, title: str, description: str) -> OpportunityAnalysisResponse:
+    def discover_opportunities(
+        self, title: str, description: str
+    ) -> OpportunityAnalysisResponse:
         prompt = f"Analyze this marketplace listing for hidden opportunities:\nTitle: {title}\nDescription: {description}\n\n"
         prompt += "Identify factors like poor photos, generic titles, misspellings, wrong category, missing model numbers, or bundle listings.\n"
         prompt += "Return response as JSON with keys: has_misspellings (bool), is_wrong_category (bool), missing_model_number (bool), is_bundle (bool), poor_photos (bool), explanation (string), detected_factors (list of strings)."

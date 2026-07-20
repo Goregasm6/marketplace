@@ -11,7 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from .comparables import ComparableProduct, PricingProvider
 from .confidence import calculate_confidence
 from .matcher import ComparableMatch, find_matches
-from .parser import DEFAULT_BRANDS, DEFAULT_CATEGORY_KEYWORDS, ParsedListing, parse_listing
+from .parser import (
+    DEFAULT_BRANDS,
+    DEFAULT_CATEGORY_KEYWORDS,
+    ParsedListing,
+    parse_listing,
+)
 
 
 class ValuationResult(BaseModel):
@@ -41,7 +46,9 @@ class ValuationEngine:
         category_keywords: Mapping[str, Sequence[str]] = DEFAULT_CATEGORY_KEYWORDS,
     ) -> None:
         if not 0 < resale_rate <= 1:
-            raise ValueError("resale_rate must be greater than 0 and no greater than 1.")
+            raise ValueError(
+                "resale_rate must be greater than 0 and no greater than 1."
+            )
         self.providers = tuple(providers)
         self.resale_rate = resale_rate
         self.minimum_match_score = minimum_match_score
@@ -49,10 +56,15 @@ class ValuationEngine:
         self.category_keywords = category_keywords
 
     def value(self, listing: Mapping[str, Any] | Any) -> ValuationResult:
-        parsed = parse_listing(listing, brands=self.brands, category_keywords=self.category_keywords)
+        parsed = parse_listing(
+            listing, brands=self.brands, category_keywords=self.category_keywords
+        )
         matches = self._find_comparables(parsed)
         prices = [match.comparable.price for match in matches]
-        keywords = sorted({keyword for match in matches for keyword in match.matched_keywords} | set(parsed.matched_keywords))
+        keywords = sorted(
+            {keyword for match in matches for keyword in match.matched_keywords}
+            | set(parsed.matched_keywords)
+        )
         reasoning = self._reasoning(parsed, matches)
         if not prices:
             return ValuationResult(
@@ -64,10 +76,14 @@ class ValuationEngine:
             )
         market_value = round(float(median(prices)), 2)
         confidence = calculate_confidence(
-            match_scores=[match.score for match in matches], prices=prices,
+            match_scores=[match.score for match in matches],
+            prices=prices,
             recognized=bool(parsed.recognized_brand or parsed.recognized_model),
         )
-        reasoning.insert(0, f"Estimated market value from {len(prices)} matched comparable(s) using the median sale price.")
+        reasoning.insert(
+            0,
+            f"Estimated market value from {len(prices)} matched comparable(s) using the median sale price.",
+        )
         return ValuationResult(
             estimated_market_value=market_value,
             estimated_resale_value=round(market_value * self.resale_rate, 2),
@@ -85,7 +101,9 @@ class ValuationEngine:
         return find_matches(parsed, products, minimum_score=self.minimum_match_score)
 
     @staticmethod
-    def _reasoning(parsed: ParsedListing, matches: Sequence[ComparableMatch]) -> list[str]:
+    def _reasoning(
+        parsed: ParsedListing, matches: Sequence[ComparableMatch]
+    ) -> list[str]:
         reasons = []
         if parsed.recognized_brand:
             reasons.append(f"Recognized brand: {parsed.recognized_brand}.")
@@ -98,6 +116,8 @@ class ValuationEngine:
         return reasons
 
 
-def estimate_value(listing: Mapping[str, Any] | Any, providers: Sequence[PricingProvider] = ()) -> ValuationResult:
+def estimate_value(
+    listing: Mapping[str, Any] | Any, providers: Sequence[PricingProvider] = ()
+) -> ValuationResult:
     """Convenience entry point for callers that do not need a long-lived engine."""
     return ValuationEngine(providers).value(listing)

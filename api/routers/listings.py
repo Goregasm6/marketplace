@@ -9,6 +9,7 @@ from api.deps import get_listing_repository
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
+
 @router.get("/", response_model=List[ListingRead])
 def list_listings(
     status: ListingStatus = None,
@@ -18,6 +19,7 @@ def list_listings(
     if status:
         return repo.list_by_status(status)
     return repo.list()
+
 
 @router.get("/{listing_id}", response_model=ListingRead)
 def get_listing(
@@ -30,6 +32,7 @@ def get_listing(
         raise HTTPException(status_code=404, detail="Listing not found")
     return listing
 
+
 @router.post("/", response_model=ListingRead, status_code=status.HTTP_201_CREATED)
 def create_listing(
     listing_in: ListingCreate,
@@ -37,8 +40,10 @@ def create_listing(
 ) -> Any:
     """Create a new listing."""
     from database.models import Listing
+
     listing = Listing(**listing_in.model_dump())
     return repo.create(listing)
+
 
 @router.patch("/{listing_id}", response_model=ListingRead)
 def update_listing(
@@ -51,6 +56,7 @@ def update_listing(
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     return listing
+
 
 @router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_listing(

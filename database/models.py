@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import ClassVar, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy.orm import Mapped
+from sqlalchemy import Column, Integer, text
+from sqlalchemy.orm import Mapped, declared_attr
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -29,12 +30,20 @@ class BaseTimestampModel(SQLModel):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         nullable=False,
-        sa_column_kwargs={"server_default": "CURRENT_TIMESTAMP"},
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         nullable=False,
-        sa_column_kwargs={"server_default": "CURRENT_TIMESTAMP"},
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+    )
+
+    version: ClassVar[int] = declared_attr(
+        lambda cls: Column(Integer, server_default=text("1"), nullable=False)
+    )
+
+    __mapper_args__: ClassVar[dict] = declared_attr(
+        lambda cls: {"version_id_col": cls.version}
     )
 
 
@@ -87,7 +96,9 @@ class Image(BaseTimestampModel, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     url: str = Field(index=True, min_length=1)
     caption: Optional[str] = Field(default=None)
-    listing_id: Optional[UUID] = Field(default=None, foreign_key="listings.id", index=True)
+    listing_id: Optional[UUID] = Field(
+        default=None, foreign_key="listings.id", index=True
+    )
 
     listing: Optional[Listing] = Relationship(back_populates="images")
 
@@ -102,7 +113,9 @@ class PriceHistory(BaseTimestampModel, table=True):
         nullable=False,
         index=True,
     )
-    listing_id: Optional[UUID] = Field(default=None, foreign_key="listings.id", index=True)
+    listing_id: Optional[UUID] = Field(
+        default=None, foreign_key="listings.id", index=True
+    )
 
     listing: Optional[Listing] = Relationship(back_populates="price_history")
 
@@ -114,7 +127,9 @@ class Opportunity(BaseTimestampModel, table=True):
     potential_profit: float = Field(ge=0)
     confidence_score: float = Field(ge=0, le=1)
     notes: Optional[str] = Field(default=None)
-    listing_id: Optional[UUID] = Field(default=None, foreign_key="listings.id", index=True)
+    listing_id: Optional[UUID] = Field(
+        default=None, foreign_key="listings.id", index=True
+    )
 
     listing: Optional[Listing] = Relationship(back_populates="opportunities")
     queue_item: Optional["Queue"] = Relationship(back_populates="opportunity")
@@ -129,7 +144,9 @@ class Queue(BaseTimestampModel, table=True):
     status: QueueStatus = Field(default=QueueStatus.NEW, index=True)
     review_notes: Optional[str] = Field(default=None)
     reviewed_at: Optional[datetime] = Field(default=None, index=True)
-    opportunity_id: UUID = Field(foreign_key="opportunities.id", unique=True, index=True)
+    opportunity_id: UUID = Field(
+        foreign_key="opportunities.id", unique=True, index=True
+    )
 
     opportunity: Optional[Opportunity] = Relationship(back_populates="queue_item")
 
@@ -145,6 +162,24 @@ class Purchase(BaseTimestampModel, table=True):
         index=True,
     )
     notes: Optional[str] = Field(default=None)
-    listing_id: Optional[UUID] = Field(default=None, foreign_key="listings.id", unique=True, index=True)
+    listing_id: Optional[UUID] = Field(
+        default=None, foreign_key="listings.id", unique=True, index=True
+    )
 
     listing: Optional[Listing] = Relationship(back_populates="purchase")
+
+
+class DeletedRecord(SQLModel, table=True):
+    """Tracks records deleted from the operational database to sync with analytics."""
+
+    __tablename__ = "deleted_records"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    table_name: str = Field(index=True)
+    record_id: str = Field(index=True)  # UUID string
+    deleted_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+        sa_column_kwargs={"server_default": "CURRENT_TIMESTAMP"},
+    )

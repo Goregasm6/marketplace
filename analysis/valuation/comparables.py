@@ -32,7 +32,9 @@ class PricingProvider(Protocol):
 
     name: str
 
-    def find_comparables(self, listing: ParsedListing) -> Sequence[ComparableProduct]: ...
+    def find_comparables(
+        self, listing: ParsedListing
+    ) -> Sequence[ComparableProduct]: ...
 
 
 class InMemoryPricingProvider:

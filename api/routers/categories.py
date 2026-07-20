@@ -6,6 +6,7 @@ from api.deps import get_plugin_registry
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
+
 @router.get("/", response_model=List[dict])
 def list_categories(
     registry: PluginRegistry = Depends(get_plugin_registry),
@@ -13,6 +14,7 @@ def list_categories(
     """Retrieve all available categories."""
     categories = registry.get_categories()
     return [c.metadata for c in categories]
+
 
 @router.get("/{name}", response_model=dict)
 def get_category(

@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 
 from collectors.craigslist import CraigslistCollector
@@ -7,23 +8,25 @@ from database.models import Listing, ListingStatus
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "craigslist_search.html"
 
 
-def test_craigslist_search_reads_fixture_html():
+@pytest.mark.asyncio
+async def test_craigslist_search_reads_fixture_html():
     collector = CraigslistCollector(obey_robots=False, request_delay=0)
 
-    html = collector.search("desk", fixture_path=str(FIXTURE_PATH))
+    html = await collector.search("desk", fixture_path=str(FIXTURE_PATH))
 
     assert isinstance(html, str)
     assert "Vintage desk" in html
 
 
-def test_craigslist_fetch_and_normalize_listing_data():
+@pytest.mark.asyncio
+async def test_craigslist_fetch_and_normalize_listing_data():
     collector = CraigslistCollector(obey_robots=False, request_delay=0)
-    html = collector.search("desk", fixture_path=str(FIXTURE_PATH))
-    results = collector.fetch(html)
+    html = await collector.search("desk", fixture_path=str(FIXTURE_PATH))
+    results = await collector.fetch(html)
 
     assert len(results) == 2
 
-    normalized = collector.normalize(results[0])
+    normalized = await collector.normalize(results[0])
 
     assert isinstance(normalized, Listing)
     assert normalized.title == "Vintage desk"
@@ -34,15 +37,16 @@ def test_craigslist_fetch_and_normalize_listing_data():
     assert normalized.status == ListingStatus.NEW
 
 
-def test_craigslist_save_deduplicates_items():
+@pytest.mark.asyncio
+async def test_craigslist_save_deduplicates_items():
     collector = CraigslistCollector(obey_robots=False, request_delay=0)
-    html = collector.search("desk", fixture_path=str(FIXTURE_PATH))
-    results = collector.fetch(html)
+    html = await collector.search("desk", fixture_path=str(FIXTURE_PATH))
+    results = await collector.fetch(html)
 
-    first = collector.normalize(results[0])
-    second = collector.normalize(results[0])
+    first = await collector.normalize(results[0])
+    second = await collector.normalize(results[0])
 
-    saved = collector.save([first, second])
+    saved = await collector.save([first, second])
 
     assert len(saved) == 1
     assert saved[0].external_id == "12345"

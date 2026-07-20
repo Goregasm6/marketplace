@@ -35,13 +35,41 @@ class DiscordNotification(Notification):
                     "description": alert.reasoning,
                     "color": 3066993,
                     "fields": [
-                        {"name": "Price", "value": self._money(alert.price), "inline": True},
-                        {"name": "Estimated value", "value": self._money(alert.estimated_value), "inline": True},
-                        {"name": "Expected profit", "value": self._money(alert.expected_profit), "inline": True},
-                        {"name": "FlipScore", "value": str(alert.flip_score), "inline": True},
-                        {"name": "Confidence", "value": f"{alert.confidence:.0%}", "inline": True},
-                        {"name": "Reasoning", "value": alert.reasoning, "inline": False},
-                        {"name": "Listing URL", "value": alert.listing_url, "inline": False},
+                        {
+                            "name": "Price",
+                            "value": self._money(alert.price),
+                            "inline": True,
+                        },
+                        {
+                            "name": "Estimated value",
+                            "value": self._money(alert.estimated_value),
+                            "inline": True,
+                        },
+                        {
+                            "name": "Expected profit",
+                            "value": self._money(alert.expected_profit),
+                            "inline": True,
+                        },
+                        {
+                            "name": "FlipScore",
+                            "value": str(alert.flip_score),
+                            "inline": True,
+                        },
+                        {
+                            "name": "Confidence",
+                            "value": f"{alert.confidence:.0%}",
+                            "inline": True,
+                        },
+                        {
+                            "name": "Reasoning",
+                            "value": alert.reasoning,
+                            "inline": False,
+                        },
+                        {
+                            "name": "Listing URL",
+                            "value": alert.listing_url,
+                            "inline": False,
+                        },
                     ],
                 }
             ],

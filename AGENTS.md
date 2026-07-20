@@ -6,7 +6,7 @@ MAIE (Marketplace Arbitrage Intelligence Engine) is a modular Python system for 
 
 The project follows a layered architecture with clear boundaries between data collection, analysis, and persistence:
 
-- **`./collectors/`**: Marketplace-specific adapters implementing the `BaseCollector` interface. They handle searching, fetching, and normalizing data.
+- **`./collectors/`**: Marketplace-specific adapters implementing the `BaseCollector` interface. They handle searching, fetching, and normalizing data. Parsers are located in `./collectors/parsers/`.
 - **`./analysis/`**: Scoring (FlipScore), classification, and enrichment logic. Isolated from data collection.
 - **`./categories/`**: Domain-specific knowledge plugins (e.g., `electronics.py`, `tools.py`) that provide search keywords and category-specific margins.
 - **`./core/`**: Shared domain logic, plugin registry, and the runtime scheduler.
@@ -42,3 +42,14 @@ The project uses `uv` for dependency management.
 
 - **Commit Messages**: Use concise, descriptive messages (e.g., "built the foundation", "Initial marketplace AI engine").
 - **Workflow**: Ensure `make lint` and `make test` pass before submitting any changes.
+
+## Parsing Architecture
+
+The project uses a resilient parsing architecture to handle marketplace search results:
+
+- **Interface**: Defined in `./core/parsing.py` as `BaseParser` (a Protocol).
+- **Implementation**: Each marketplace has its own parser in `./collectors/parsers/` (e.g., `./collectors/parsers/craigslist.py`).
+- **Resilience**: Parsers prefer `selectolax` for performance but fall back to `BeautifulSoup` if not available.
+- **Registry**: Parsers are registered in the `ParserRegistry` in `./core/parsing.py` for dynamic retrieval.
+- **CSS Selectors**: Parsers use CSS selectors instead of manual state machines for better maintainability.
+- **Testing**: Parsers are tested using HTML fixtures in `./tests/fixtures/` to avoid live scraping during tests.

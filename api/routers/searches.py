@@ -8,12 +8,14 @@ from api.deps import get_search_repository
 
 router = APIRouter(prefix="/searches", tags=["searches"])
 
+
 @router.get("/", response_model=List[SearchRead])
 def list_searches(
     repo: SearchRepository = Depends(get_search_repository),
 ) -> Any:
     """Retrieve all recent searches."""
     return repo.list()
+
 
 @router.get("/{search_id}", response_model=SearchRead)
 def get_search(
@@ -26,6 +28,7 @@ def get_search(
         raise HTTPException(status_code=404, detail="Search not found")
     return search
 
+
 @router.post("/", response_model=SearchRead, status_code=status.HTTP_201_CREATED)
 def create_search(
     search_in: SearchCreate,
@@ -33,5 +36,6 @@ def create_search(
 ) -> Any:
     """Log a new search query."""
     from database.models import Search
+
     search = Search(**search_in.model_dump())
     return repo.create(search)

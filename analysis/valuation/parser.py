@@ -42,7 +42,9 @@ class ParsedListing(BaseModel):
     matched_keywords: list[str] = Field(default_factory=list)
 
 
-def _read_listing_field(listing: Mapping[str, Any] | Any, field: str, default: Any = None) -> Any:
+def _read_listing_field(
+    listing: Mapping[str, Any] | Any, field: str, default: Any = None
+) -> Any:
     if isinstance(listing, Mapping):
         return listing.get(field, default)
     return getattr(listing, field, default)
@@ -50,7 +52,9 @@ def _read_listing_field(listing: Mapping[str, Any] | Any, field: str, default: A
 
 def extract_brand(text: str, brands: Sequence[str] = DEFAULT_BRANDS) -> str | None:
     normalized = normalize_title(text)
-    for brand in sorted(brands, key=lambda item: len(normalize_title(item)), reverse=True):
+    for brand in sorted(
+        brands, key=lambda item: len(normalize_title(item)), reverse=True
+    ):
         pattern = rf"(?<!\w){re.escape(normalize_title(brand))}(?!\w)"
         if re.search(pattern, normalized):
             return brand
@@ -62,13 +66,29 @@ def extract_model(text: str, brand: str | None = None) -> str | None:
     original = " ".join((text or "").split())
     normalized = normalize_title(original)
     if brand and normalize_title(brand) == "apple":
-        match = re.search(r"\b(iphone\s+(?:\d{1,2}(?:\s+(?:pro|max|mini|plus))?|se|xr|xs(?:\s+max)?))\b", normalized)
+        match = re.search(
+            r"\b(iphone\s+(?:\d{1,2}(?:\s+(?:pro|max|mini|plus))?|se|xr|xs(?:\s+max)?))\b",
+            normalized,
+        )
         if match:
             parts = match.group(1).split()
-            return " ".join("iPhone" if word == "iphone" else word.capitalize() if not word.isdigit() else word for word in parts)
-        match = re.search(r"\b(ipad(?:\s+(?:pro|air|mini))?(?:\s+\d+(?:st|nd|rd|th)\s+gen)?)\b", normalized)
+            return " ".join(
+                "iPhone"
+                if word == "iphone"
+                else word.capitalize()
+                if not word.isdigit()
+                else word
+                for word in parts
+            )
+        match = re.search(
+            r"\b(ipad(?:\s+(?:pro|air|mini))?(?:\s+\d+(?:st|nd|rd|th)\s+gen)?)\b",
+            normalized,
+        )
         if match:
-            return " ".join(word.capitalize() if word != "ipad" else "iPad" for word in match.group(1).split())
+            return " ".join(
+                word.capitalize() if word != "ipad" else "iPad"
+                for word in match.group(1).split()
+            )
 
     # Identifiers such as WH-1000XM4, XPS-13, D850, and PS5 are stronger than
     # arbitrary title words and work across product categories.
@@ -85,8 +105,7 @@ def detect_category(
     matches: list[tuple[str, list[str]]] = []
     for category, keywords in category_keywords.items():
         found = [
-            keyword for keyword in keywords
-            if f" {normalize_title(keyword)} " in padded
+            keyword for keyword in keywords if f" {normalize_title(keyword)} " in padded
         ]
         if found:
             matches.append((category, found))
@@ -107,7 +126,9 @@ def parse_listing(
     if not title:
         raise ValueError("A listing title is required for valuation.")
     description = str(_read_listing_field(listing, "description", "") or "")
-    price = _read_listing_field(listing, "price", _read_listing_field(listing, "asking_price"))
+    price = _read_listing_field(
+        listing, "price", _read_listing_field(listing, "asking_price")
+    )
     brand = extract_brand(title, brands)
     category, keywords = detect_category(f"{title} {description}", category_keywords)
     return ParsedListing(

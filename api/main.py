@@ -22,10 +22,12 @@ from api.routers import (
 )
 from database.database import initialize_database
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_database()
     yield
+
 
 app = FastAPI(
     title="MAIE API",
@@ -44,25 +46,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     """Log request details and add timing header."""
     start_time = time.time()
-    
+
     # Avoid logging sensitive information
     # We log the method and URL, but not headers (which might contain API keys)
     # or the body (which might contain secrets) unless specifically needed.
     method = request.method
     url = request.url.path
-    
+
     response = await call_next(request)
-    
+
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
-    
-    logging.info(f"{method} {url} - Status: {response.status_code} - Duration: {process_time:.4f}s")
-    
+
+    logging.info(
+        f"{method} {url} - Status: {response.status_code} - Duration: {process_time:.4f}s"
+    )
+
     return response
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -73,6 +79,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "An internal server error occurred."},
     )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Pass-through for known HTTP exceptions."""
@@ -80,6 +87,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         status_code=exc.status_code,
         content={"detail": exc.detail},
     )
+
 
 app.include_router(listings.router)
 app.include_router(opportunities.router)
@@ -90,6 +98,7 @@ app.include_router(searches.router)
 app.include_router(analytics.router)
 app.include_router(scheduler.router)
 app.include_router(config.router)
+
 
 @app.get("/")
 def root():

@@ -13,13 +13,17 @@ class LLMAnalysisPlugin(AIPlugin):
     def __init__(self, service: AIService | None = None):
         self.service = service or AIService()
 
-    def run(self, context: ListingContext, artifacts: AnalysisArtifacts) -> AnalysisArtifacts:
+    def run(
+        self, context: ListingContext, artifacts: AnalysisArtifacts
+    ) -> AnalysisArtifacts:
         if not settings.ai_enabled:
             return artifacts
 
         # Perform high-level summary if not already present
         if not artifacts.llm_summary and context.description:
-            artifacts.llm_summary = self.service.cleanup_description(context.description)
+            artifacts.llm_summary = self.service.cleanup_description(
+                context.description
+            )
 
         # Generate recommendation if not present
         if not artifacts.recommendation and context.title:
@@ -32,7 +36,9 @@ class LLMAnalysisPlugin(AIPlugin):
         # Add more logic as needed for other tasks
         # For example, repair estimation
         if context.title and context.description:
-            repair_est = self.service.estimate_repair(context.title, context.description)
+            repair_est = self.service.estimate_repair(
+                context.title, context.description
+            )
             if repair_est.needed:
                 artifacts.raw_data["repair_estimate"] = repair_est.model_dump()
 

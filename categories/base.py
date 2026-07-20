@@ -42,7 +42,9 @@ class CategoryKnowledge(CategoryPlugin):
     common_misspellings: tuple[str, ...] = ()
     seasonality: str = "Year-round; monitor local demand."
     repair_opportunities: tuple[str, ...] = ()
-    shipping_profile: ShippingProfile = ShippingProfile("unknown", "review", "No profile provided.")
+    shipping_profile: ShippingProfile = ShippingProfile(
+        "unknown", "review", "No profile provided."
+    )
     typical_margins: MarginRange = MarginRange(0.0, 0.0)
     pricing_providers: tuple[str, ...] = ()
     common_model_prefixes: tuple[str, ...] = ()
@@ -57,5 +59,10 @@ class CategoryKnowledge(CategoryPlugin):
         from analysis.valuation.parser import normalize_title
 
         normalized = normalize_title(text)
-        signals = (*self.keywords, *self.brands, *self.common_misspellings, *self.common_model_prefixes)
+        signals = (
+            *self.keywords,
+            *self.brands,
+            *self.common_misspellings,
+            *self.common_model_prefixes,
+        )
         return [signal for signal in signals if normalize_title(signal) in normalized]

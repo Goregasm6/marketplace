@@ -8,10 +8,14 @@ from typing import Any
 from analytics import queries
 
 
-def dashboard_data(warehouse_path: str | Path | None = None) -> dict[str, list[dict[str, Any]]]:
+def dashboard_data(
+    warehouse_path: str | Path | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     """Return all supported analytics panels from an existing warehouse snapshot."""
     return {
-        "most_profitable_categories": queries.most_profitable_categories(warehouse_path),
+        "most_profitable_categories": queries.most_profitable_categories(
+            warehouse_path
+        ),
         "average_flipscore": queries.average_flipscore(warehouse_path),
         "median_asking_prices": queries.median_asking_prices(warehouse_path),
         "price_reductions": queries.price_reductions(warehouse_path),

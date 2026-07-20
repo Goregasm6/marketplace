@@ -38,7 +38,9 @@ class AIPlugin(Protocol):
 
     name: str
 
-    def run(self, context: ListingContext, artifacts: AnalysisArtifacts) -> AnalysisArtifacts:
+    def run(
+        self, context: ListingContext, artifacts: AnalysisArtifacts
+    ) -> AnalysisArtifacts:
         """Return updated artifacts after processing a listing."""
 
 

@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import pytest
 from typing import Any
 
 from typer.testing import CliRunner
@@ -17,23 +16,23 @@ class RecordingCollector(BaseCollector):
         self.calls = 0
         self.fail_once = fail_once
 
-    def search(self, query: str, **kwargs: Any) -> Any:
+    async def search(self, query: str, **kwargs: Any) -> Any:
         return []
 
-    def fetch(self, search_results: Any, **kwargs: Any) -> Any:
+    async def fetch(self, search_results: Any, **kwargs: Any) -> Any:
         return []
 
-    def normalize(self, item: Any, **kwargs: Any) -> Any:
+    async def normalize(self, item: Any, **kwargs: Any) -> Any:
         return item
 
-    def validate(self, item: Any, **kwargs: Any) -> bool:
+    async def validate(self, item: Any, **kwargs: Any) -> bool:
         return True
 
-    def save(self, items: Any, **kwargs: Any) -> Any:
+    async def save(self, items: Any, **kwargs: Any) -> Any:
         self.calls += 1
         return list(items)
 
-    def run(self, query: str, **kwargs: Any) -> Any:
+    async def run(self, query: str, **kwargs: Any) -> Any:
         if self.fail_once and self.calls == 0:
             self.calls += 1
             raise RuntimeError("boom")
@@ -46,33 +45,43 @@ class FakeScheduler:
         self.jobs: list[dict[str, Any]] = []
         self.started = False
 
-    def add_job(self, func, **kwargs: Any) -> None:
-        self.jobs.append({"func": func, **kwargs})
+    def schedule(self, func, **kwargs: Any) -> str:
+        job_id = kwargs.get("job_id") or str(len(self.jobs))
+        self.jobs.append({"func": func, "id": job_id, **kwargs})
+        return job_id
 
-    def remove_job(self, job_id: str) -> None:
+    def cancel(self, job_id: str) -> bool:
         self.jobs = [job for job in self.jobs if job.get("id") != job_id]
+        return True
 
     def start(self) -> None:
         self.started = True
 
-    def shutdown(self, wait: bool = True) -> None:
+    def stop(self, wait: bool = True) -> None:
         self.started = False
 
-    def get_jobs(self) -> list[dict[str, Any]]:
-        return list(self.jobs)
+    def pause(self) -> None:
+        pass
+
+    def resume(self) -> None:
+        pass
+
+    def status(self) -> dict[str, Any]:
+        return {"running": self.started, "jobs_count": len(self.jobs)}
 
 
-def test_scheduler_executes_enabled_collectors_and_records_metrics() -> None:
+@pytest.mark.asyncio
+async def test_scheduler_executes_enabled_collectors_and_records_metrics() -> None:
     collector = RecordingCollector()
     settings = Settings(enabled_collectors=["recording"], search_interval=2)
     service = SchedulerService(
         settings=settings,
         collectors={"recording": collector},
-        scheduler_factory=lambda: FakeScheduler(),
+        backend=FakeScheduler(),
     )
 
     service.start()
-    result = service.run_job("recording")
+    result = await service.run_job("recording")
 
     assert collector.calls == 1
     assert result["status"] == "success"
@@ -80,41 +89,43 @@ def test_scheduler_executes_enabled_collectors_and_records_metrics() -> None:
     assert service.metrics[-1]["status"] == "success"
 
 
-def test_scheduler_skips_overlapping_jobs() -> None:
+@pytest.mark.asyncio
+async def test_scheduler_skips_overlapping_jobs() -> None:
     collector = RecordingCollector()
     settings = Settings(enabled_collectors=["recording"], search_interval=2)
     service = SchedulerService(
         settings=settings,
         collectors={"recording": collector},
-        scheduler_factory=lambda: FakeScheduler(),
+        backend=FakeScheduler(),
     )
 
-    service._job_locks["recording"].acquire()
-    result = service._run_job_safe("recording")
+    async with service._job_locks["recording"]:
+        result = await service._run_job_safe("recording")
 
     assert result["status"] == "skipped"
     assert collector.calls == 0
 
 
-def test_scheduler_retries_failed_jobs_with_backoff(monkeypatch: Any) -> None:
+@pytest.mark.asyncio
+async def test_scheduler_retries_failed_jobs_with_backoff(monkeypatch: Any) -> None:
     collector = RecordingCollector(fail_once=True)
     settings = Settings(enabled_collectors=["recording"], search_interval=2)
     sleeps: list[float] = []
 
-    def fake_sleep(seconds: float) -> None:
+    async def fake_sleep(seconds: float) -> None:
         sleeps.append(seconds)
 
-    monkeypatch.setattr("core.scheduler.time.sleep", fake_sleep)
+    monkeypatch.setattr("core.scheduler.asyncio.sleep", fake_sleep)
 
     service = SchedulerService(
         settings=settings,
         collectors={"recording": collector},
-        scheduler_factory=lambda: FakeScheduler(),
+        backend=FakeScheduler(),
         retry_attempts=2,
         retry_backoff_base_seconds=1.0,
     )
 
-    result = service._execute_collector("recording")
+    result = await service._execute_collector("recording")
 
     assert collector.calls == 2
     assert result["status"] == "success"

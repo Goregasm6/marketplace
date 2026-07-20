@@ -4,13 +4,19 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from analysis.market_memory import ListingHistoryService, PriceHistoryService, SellerHistoryService
+from analysis.market_memory import (
+    ListingHistoryService,
+    PriceHistoryService,
+    SellerHistoryService,
+)
 from database.database import get_session, initialize_database
 from database.models import Listing, ListingStatus, Seller
 
 
 def _listing(title: str, price: float, external_id: str, **values: object) -> Listing:
-    return Listing(title=title, price=price, source="market", external_id=external_id, **values)
+    return Listing(
+        title=title, price=price, source="market", external_id=external_id, **values
+    )
 
 
 def test_price_history_records_every_observation_and_detects_drops(tmp_path) -> None:
@@ -34,22 +40,35 @@ def test_price_history_records_every_observation_and_detects_drops(tmp_path) -> 
     assert metrics.lowest_price == 2700
 
 
-def test_listing_memory_identifies_seen_relists_keywords_and_similar_sale_time(tmp_path) -> None:
+def test_listing_memory_identifies_seen_relists_keywords_and_similar_sale_time(
+    tmp_path,
+) -> None:
     db_path = tmp_path / "listing-memory.db"
     initialize_database(str(db_path))
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     service = ListingHistoryService(str(db_path))
 
-    original = service.observe(_listing("Vintage Nikon F3 Camera", 500, "nikon-old", created_at=start), start)
-    relist = _listing("Vintage Nikon F3 Camera", 450, "nikon-new", created_at=start + timedelta(days=10))
+    original = service.observe(
+        _listing("Vintage Nikon F3 Camera", 500, "nikon-old", created_at=start), start
+    )
+    relist = _listing(
+        "Vintage Nikon F3 Camera",
+        450,
+        "nikon-new",
+        created_at=start + timedelta(days=10),
+    )
     assert service.has_seen_before(relist)
     new_result = service.observe(relist, start + timedelta(days=10))
     assert new_result.is_new_listing
     assert new_result.relisted_from_id == original.listing.id
 
     sold = _listing(
-        "Vintage Nikon F3 Camera", 550, "nikon-sold", status=ListingStatus.ARCHIVED,
-        created_at=start - timedelta(days=8), updated_at=start,
+        "Vintage Nikon F3 Camera",
+        550,
+        "nikon-sold",
+        status=ListingStatus.ARCHIVED,
+        created_at=start - timedelta(days=8),
+        updated_at=start,
     )
     service.observe(sold, start)
 

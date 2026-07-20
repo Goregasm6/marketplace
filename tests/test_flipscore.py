@@ -26,7 +26,9 @@ def test_demand_score_evaluates_signals() -> None:
 
 
 def test_seller_score_rewards_motivation_and_freshness() -> None:
-    result = SellerScore().calculate({"seller_motivation": "must sell urgently", "listing_age": 1})
+    result = SellerScore().calculate(
+        {"seller_motivation": "must sell urgently", "listing_age": 1}
+    )
 
     assert result.score > 50
     assert "motivated" in result.explanation.lower()
@@ -34,7 +36,9 @@ def test_seller_score_rewards_motivation_and_freshness() -> None:
 
 
 def test_risk_score_detects_risk_factors() -> None:
-    result = RiskScore().calculate({"repair_indicators": ["cracked screen"], "description": "as is untested"})
+    result = RiskScore().calculate(
+        {"repair_indicators": ["cracked screen"], "description": "as is untested"}
+    )
 
     assert result.score < 50
     assert "repair" in result.explanation.lower()
@@ -66,7 +70,7 @@ def test_evaluate_listing_returns_modular_results() -> None:
         "seller_motivation": "must sell urgently",
         "repair_indicators": [],
     }
-    
+
     result = evaluate_listing(listing)
 
     assert 0 <= result["score"] <= 100
@@ -79,12 +83,12 @@ def test_evaluate_listing_returns_modular_results() -> None:
 
 
 def test_custom_weights_affect_score() -> None:
-    listing = {"price": 500, "distance": 2} # High price (bad), Close (good)
-    
+    listing = {"price": 500, "distance": 2}  # High price (bad), Close (good)
+
     # Weight price heavily
     res1 = evaluate_listing(listing, weights={"price": 10.0, "distance": 0.1})
-    
+
     # Weight distance heavily
     res2 = evaluate_listing(listing, weights={"price": 0.1, "distance": 10.0})
-    
+
     assert res1["score"] < res2["score"]

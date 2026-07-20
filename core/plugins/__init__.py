@@ -159,7 +159,9 @@ class PluginLoader:
 
     def discover(self, packages: Iterable[str] | None = None) -> list[BasePlugin]:
         discovered: list[BasePlugin] = []
-        package_names = list(packages or ["collectors", "analysis", "categories", "alerts", "plugins"])
+        package_names = list(
+            packages or ["collectors", "analysis", "categories", "alerts", "plugins"]
+        )
         for package_name in package_names:
             discovered.extend(self._load_package(package_name))
         return discovered
@@ -174,7 +176,9 @@ class PluginLoader:
             return []
 
         previous_plugins = list(self.registry.all())
-        for _, module_name, _ in pkgutil.iter_modules(package.__path__, package.__name__ + "."):
+        for _, module_name, _ in pkgutil.iter_modules(
+            package.__path__, package.__name__ + "."
+        ):
             if module_name.endswith(".base") or module_name.endswith(".__init__"):
                 continue
             try:
@@ -182,7 +186,9 @@ class PluginLoader:
             except Exception:
                 continue
 
-        new_plugins = [plugin for plugin in self.registry.all() if plugin not in previous_plugins]
+        new_plugins = [
+            plugin for plugin in self.registry.all() if plugin not in previous_plugins
+        ]
         return new_plugins
 
     def load_module(self, module_name: str) -> list[BasePlugin]:
@@ -196,7 +202,13 @@ class PluginLoader:
                 continue
             if not issubclass(value, BasePlugin) or inspect.isabstract(value):
                 continue
-            if value in {CollectorPlugin, CategoryPlugin, AnalyzerPlugin, NotificationPlugin, FutureAIPlugin}:
+            if value in {
+                CollectorPlugin,
+                CategoryPlugin,
+                AnalyzerPlugin,
+                NotificationPlugin,
+                FutureAIPlugin,
+            }:
                 continue
             if getattr(value, "__module__", None) != module_name:
                 continue

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from analysis.ai_interfaces import AnalysisArtifacts, ListingContext
 from analysis.images.interfaces import (
@@ -30,7 +29,9 @@ class ImageAnalysisPipeline:
 
     name: str = "image_pipeline"
 
-    def process_image(self, image_url: str, reference_urls: list[str] | None = None) -> ImageAnalysisResult:
+    def process_image(
+        self, image_url: str, reference_urls: list[str] | None = None
+    ) -> ImageAnalysisResult:
         """Run all configured analysis steps on a single image."""
         result = ImageAnalysisResult(image_url=image_url)
 
@@ -50,7 +51,9 @@ class ImageAnalysisPipeline:
             result.model_numbers = self.model_recognizer.identify_models(image_url)
 
         if self.duplicate_detector:
-            result.is_duplicate = self.duplicate_detector.check_duplicate(image_url, reference_urls or [])
+            result.is_duplicate = self.duplicate_detector.check_duplicate(
+                image_url, reference_urls or []
+            )
 
         if self.damage_detector:
             is_damaged, details = self.damage_detector.detect_damage(image_url)
@@ -59,7 +62,9 @@ class ImageAnalysisPipeline:
 
         return result
 
-    def run(self, context: ListingContext, artifacts: AnalysisArtifacts) -> AnalysisArtifacts:
+    def run(
+        self, context: ListingContext, artifacts: AnalysisArtifacts
+    ) -> AnalysisArtifacts:
         """AIPlugin compatible entry point."""
         # For now, we assume the context might have image URLs in raw_data or similar
         # This is a bridge between the core analysis flow and this specialized pipeline
@@ -76,19 +81,21 @@ class ImageAnalysisPipeline:
         # Update artifacts
         if all_results:
             # Aggregate data into artifacts
-            artifacts.ocr_text = " ".join([r.ocr_text for r in all_results if r.ocr_text])
-            
+            artifacts.ocr_text = " ".join(
+                [r.ocr_text for r in all_results if r.ocr_text]
+            )
+
             labels = set(artifacts.image_labels)
             objects = set(artifacts.detected_objects)
-            
+
             for r in all_results:
                 labels.update([label.label for label in r.labels])
                 objects.update([obj.label for obj in r.objects])
-            
+
             artifacts.image_labels = list(labels)
             artifacts.detected_objects = list(objects)
-            
-            # We could add more fields to AnalysisArtifacts if needed, 
+
+            # We could add more fields to AnalysisArtifacts if needed,
             # but for now we use what's available.
             artifacts.raw_data["image_analysis"] = [r.__dict__ for r in all_results]
 

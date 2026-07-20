@@ -6,12 +6,14 @@ from api.deps import get_scheduler_service
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
+
 @router.get("/status", response_model=dict)
 def get_scheduler_status(
     service: SchedulerService = Depends(get_scheduler_service),
 ) -> Any:
     """Show scheduler configuration and recent execution metrics."""
     return service.status()
+
 
 @router.post("/start", response_model=dict)
 def start_scheduler(
@@ -21,13 +23,33 @@ def start_scheduler(
     service.start()
     return {"message": "Scheduler started"}
 
+
 @router.post("/stop", response_model=dict)
 def stop_scheduler(
     service: SchedulerService = Depends(get_scheduler_service),
 ) -> Any:
     """Stop the background scheduler."""
-    service.shutdown()
+    service.stop()
     return {"message": "Scheduler stopped"}
+
+
+@router.post("/pause", response_model=dict)
+def pause_scheduler(
+    service: SchedulerService = Depends(get_scheduler_service),
+) -> Any:
+    """Pause the background scheduler."""
+    service.pause()
+    return {"message": "Scheduler paused"}
+
+
+@router.post("/resume", response_model=dict)
+def resume_scheduler(
+    service: SchedulerService = Depends(get_scheduler_service),
+) -> Any:
+    """Resume the background scheduler."""
+    service.resume()
+    return {"message": "Scheduler resumed"}
+
 
 @router.post("/run/{collector_name}", response_model=dict)
 def run_collector(
@@ -37,5 +59,5 @@ def run_collector(
     """Run a collector job immediately."""
     result = service.run_job(collector_name)
     if result.get("status") == "failed":
-         raise HTTPException(status_code=500, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
     return result

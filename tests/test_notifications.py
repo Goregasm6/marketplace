@@ -62,6 +62,9 @@ def test_notification_service_dispatches_to_all_providers() -> None:
 
     service.send(alert)
 
-    assert [provider.sent[0].title for provider in (first, second)] == ["Desk lamp", "Desk lamp"]
+    assert [provider.sent[0].title for provider in (first, second)] == [
+        "Desk lamp",
+        "Desk lamp",
+    ]
     assert first.sent[0].listing_url == "https://example.com/listing/456"
     assert second.sent[0].expected_profit == 30.0

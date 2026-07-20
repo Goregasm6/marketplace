@@ -5,7 +5,8 @@ from config.settings import settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DATABASE = str(settings.sqlite_path)
+DATABASE = settings.database_url or f"sqlite:///{settings.sqlite_path}"
+DATABASE_URL = DATABASE  # Alias for clarity
 SEARCH_INTERVAL = settings.search_interval
 SEARCH_RADIUS = settings.search_radius
 DISCORD_WEBHOOK = settings.discord_webhook

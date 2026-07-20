@@ -46,8 +46,12 @@ def _echo_queue(item: Queue) -> None:
 
 @queue_app.command("list")
 def queue_list(
-    status: QueueStatus | None = typer.Option(None, "--status", help="Only show this status"),
-    database_url: str | None = typer.Option(None, "--database-url", help="SQLite database path or URL"),
+    status: QueueStatus | None = typer.Option(
+        None, "--status", help="Only show this status"
+    ),
+    database_url: str | None = typer.Option(
+        None, "--database-url", help="SQLite database path or URL"
+    ),
 ) -> None:
     """List opportunities in the review queue."""
     repository = _queue_repository(database_url)
@@ -75,7 +79,9 @@ def _change_queue_status(
 def queue_review(
     queue_id: str = typer.Argument(..., help="Queue item UUID"),
     notes: str | None = typer.Option(None, "--notes", "-n", help="Review notes"),
-    database_url: str | None = typer.Option(None, "--database-url", help="SQLite database path or URL"),
+    database_url: str | None = typer.Option(
+        None, "--database-url", help="SQLite database path or URL"
+    ),
 ) -> None:
     """Mark an opportunity as being reviewed."""
     _change_queue_status(queue_id, "review", notes, database_url)
@@ -85,7 +91,9 @@ def queue_review(
 def queue_approve(
     queue_id: str = typer.Argument(..., help="Queue item UUID"),
     notes: str | None = typer.Option(None, "--notes", "-n", help="Approval notes"),
-    database_url: str | None = typer.Option(None, "--database-url", help="SQLite database path or URL"),
+    database_url: str | None = typer.Option(
+        None, "--database-url", help="SQLite database path or URL"
+    ),
 ) -> None:
     """Approve an opportunity; approved items are eligible for notification."""
     _change_queue_status(queue_id, "approve", notes, database_url)
@@ -95,7 +103,9 @@ def queue_approve(
 def queue_reject(
     queue_id: str = typer.Argument(..., help="Queue item UUID"),
     notes: str | None = typer.Option(None, "--notes", "-n", help="Rejection notes"),
-    database_url: str | None = typer.Option(None, "--database-url", help="SQLite database path or URL"),
+    database_url: str | None = typer.Option(
+        None, "--database-url", help="SQLite database path or URL"
+    ),
 ) -> None:
     """Reject an opportunity so it is never notified."""
     _change_queue_status(queue_id, "reject", notes, database_url)
@@ -105,7 +115,9 @@ def queue_reject(
 def queue_archive(
     queue_id: str = typer.Argument(..., help="Queue item UUID"),
     notes: str | None = typer.Option(None, "--notes", "-n", help="Archive notes"),
-    database_url: str | None = typer.Option(None, "--database-url", help="SQLite database path or URL"),
+    database_url: str | None = typer.Option(
+        None, "--database-url", help="SQLite database path or URL"
+    ),
 ) -> None:
     """Archive an opportunity after review."""
     _change_queue_status(queue_id, "archive", notes, database_url)
@@ -117,16 +129,22 @@ def scheduler_status() -> None:
     service = SchedulerService(settings=settings)
     payload = service.status()
     typer.echo(f"Scheduler running: {payload['running']}")
-    typer.echo(f"Enabled collectors: {', '.join(payload['enabled_collectors']) or 'none'}")
+    typer.echo(
+        f"Enabled collectors: {', '.join(payload['enabled_collectors']) or 'none'}"
+    )
     typer.echo(f"Interval (minutes): {payload['interval_minutes']}")
     typer.echo(f"Metrics recorded: {payload['metrics_count']}")
     if payload["latest_metrics"]:
         for metric in payload["latest_metrics"]:
-            typer.echo(f"- {metric['collector']}: {metric['status']} ({metric['attempts']} attempts)")
+            typer.echo(
+                f"- {metric['collector']}: {metric['status']} ({metric['attempts']} attempts)"
+            )
 
 
 @scheduler_app.command("run")
-def scheduler_run(collector_name: str = typer.Argument(..., help="Collector name to execute once")) -> None:
+def scheduler_run(
+    collector_name: str = typer.Argument(..., help="Collector name to execute once"),
+) -> None:
     """Run a collector job immediately."""
     service = SchedulerService(settings=settings)
     result = service.run_job(collector_name)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from analysis.images.types import ImageAnalysisResult, ImageDetection
+from analysis.images.types import ImageDetection
 
 
 @runtime_checkable

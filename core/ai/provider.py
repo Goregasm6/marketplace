@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 class AIProviderError(Exception):
     """Base exception for AI provider errors."""
+
     pass
 
 
@@ -44,7 +45,9 @@ class BaseAIProvider(ABC):
                 cleaned = cleaned[:-3]
             return json.loads(cleaned.strip())
         except json.JSONDecodeError as e:
-            raise AIProviderError(f"Failed to parse AI response as JSON: {e}\nResponse: {response}")
+            raise AIProviderError(
+                f"Failed to parse AI response as JSON: {e}\nResponse: {response}"
+            )
 
 
 class LocalProvider(BaseAIProvider):
@@ -56,13 +59,8 @@ class LocalProvider(BaseAIProvider):
         import httpx
 
         url = self.base_url or "http://localhost:11434/api/generate"
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            **kwargs
-        }
-        
+        payload = {"model": self.model, "prompt": prompt, "stream": False, **kwargs}
+
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(url, json=payload)
@@ -87,7 +85,7 @@ class OpenRouterProvider(BaseAIProvider):
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            **kwargs
+            **kwargs,
         }
 
         try:

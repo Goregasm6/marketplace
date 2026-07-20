@@ -6,19 +6,19 @@ from collectors.base import BaseCollector, CollectorRegistry, discover_collector
 class DummyCollector(BaseCollector):
     name = "dummy"
 
-    def search(self, query, **kwargs):
+    async def search(self, query, **kwargs):
         return [{"query": query}]
 
-    def fetch(self, search_results, **kwargs):
+    async def fetch(self, search_results, **kwargs):
         return search_results
 
-    def normalize(self, item, **kwargs):
+    async def normalize(self, item, **kwargs):
         return {"query": item["query"], "normalized": True}
 
-    def validate(self, item, **kwargs):
+    async def validate(self, item, **kwargs):
         return bool(item.get("query"))
 
-    def save(self, items, **kwargs):
+    async def save(self, items, **kwargs):
         return len(items)
 
 
@@ -36,9 +36,10 @@ def test_base_collector_cannot_be_instantiated_without_implementations():
         BrokenCollector()
 
 
-def test_run_orchestrates_the_collector_pipeline():
+@pytest.mark.asyncio
+async def test_run_orchestrates_the_collector_pipeline():
     collector = DummyCollector()
-    assert collector.run("books") == 1
+    assert await collector.run("books") == 1
 
 
 def test_discover_collectors_imports_modules_from_the_package():
@@ -61,15 +62,20 @@ def test_generate_search_queries_expands_base_query_with_category_terms():
 def test_generate_search_queries_returns_deduplicated_candidates():
     collector = DummyCollector()
 
-    queries = collector.generate_search_queries("receiver", category="audio", max_queries=10)
+    queries = collector.generate_search_queries(
+        "receiver", category="audio", max_queries=10
+    )
 
     assert len(queries) <= 10
     assert len(set(queries)) == len(queries)
 
 
-def test_run_can_execute_expanded_search_set():
+@pytest.mark.asyncio
+async def test_run_can_execute_expanded_search_set():
     collector = DummyCollector()
 
-    result = collector.run("marantz receiver", expand_searches=True, category="audio")
+    result = await collector.run(
+        "marantz receiver", expand_searches=True, category="audio"
+    )
 
     assert result > 1

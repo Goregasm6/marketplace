@@ -48,13 +48,20 @@ def test_sync_creates_read_only_analytics_snapshot(tmp_path: Path) -> None:
     result = sync_operational_data(operational, warehouse)
 
     assert result.tables["listings"] == 2
-    assert most_profitable_categories(warehouse) == [{
-        "category": "games", "listing_count": 1, "total_expected_profit": 75.0, "average_expected_profit": 75.0,
-    }]
+    assert most_profitable_categories(warehouse) == [
+        {
+            "category": "games",
+            "listing_count": 1,
+            "total_expected_profit": 75.0,
+            "average_expected_profit": 75.0,
+        }
+    ]
     assert average_flipscore(warehouse) == [{"average_flipscore": 70.0}]
     assert seller_frequency(warehouse)[0]["listing_count"] == 2
     assert price_reductions(warehouse)[0]["reduction_amount"] == 50.0
-    assert daily_listing_volume(warehouse) == [{"day": "2026-07-01", "listing_count": 2}]
+    assert daily_listing_volume(warehouse) == [
+        {"day": "2026-07-01", "listing_count": 2}
+    ]
 
     connection = Warehouse(warehouse).connect()
     try:
@@ -77,6 +84,12 @@ def test_dashboard_exposes_all_analytics_panels(tmp_path: Path) -> None:
     report = dashboard_data(warehouse)
 
     assert set(report) == {
-        "most_profitable_categories", "average_flipscore", "median_asking_prices", "price_reductions",
-        "seller_frequency", "keyword_performance", "category_trends", "daily_listing_volume",
+        "most_profitable_categories",
+        "average_flipscore",
+        "median_asking_prices",
+        "price_reductions",
+        "seller_frequency",
+        "keyword_performance",
+        "category_trends",
+        "daily_listing_volume",
     }

@@ -1,6 +1,12 @@
 import pytest
 
-from analysis.valuation.parser import detect_category, extract_brand, extract_model, normalize_title, parse_listing
+from analysis.valuation.parser import (
+    detect_category,
+    extract_brand,
+    extract_model,
+    normalize_title,
+    parse_listing,
+)
 
 
 def test_normalize_title_removes_case_punctuation_and_accents() -> None:

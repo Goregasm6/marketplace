@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import datetime, timezone
-from threading import Lock
 from typing import Any, Callable
 
 from loguru import logger
 
 from collectors.base import BaseCollector, CollectorRegistry, discover_collectors
 from config.settings import Settings, settings as default_settings
+from core.scheduler_base import BaseScheduler
+from core.scheduler_apscheduler import APSchedulerBackend
 
 
 class SchedulerService:
@@ -19,41 +21,39 @@ class SchedulerService:
         *,
         settings: Settings | None = None,
         collectors: dict[str, BaseCollector] | None = None,
-        scheduler_factory: Callable[[], Any] | None = None,
+        backend: BaseScheduler | None = None,
         retry_attempts: int = 3,
         retry_backoff_base_seconds: float = 1.0,
     ) -> None:
         self.settings = settings or default_settings
         self.collectors = collectors or {}
-        self.scheduler_factory = scheduler_factory or self._create_scheduler
+        self.backend = backend or APSchedulerBackend()
         self.retry_attempts = retry_attempts
         self.retry_backoff_base_seconds = retry_backoff_base_seconds
-        self.scheduler: Any | None = None
-        self._job_locks: dict[str, Lock] = {}
+        self._job_locks: dict[str, asyncio.Lock] = {}
+        self._semaphore = asyncio.Semaphore(self.settings.max_concurrent_collectors)
         self.metrics: list[dict[str, Any]] = []
         self._logger = logger.bind(component="scheduler_service")
 
         self._initialize_job_locks()
 
     def _initialize_job_locks(self) -> None:
-        enabled_collectors = [name for name in self.settings.enabled_collectors if str(name).strip()]
+        enabled_collectors = [
+            name for name in self.settings.enabled_collectors if str(name).strip()
+        ]
         for name in enabled_collectors:
-            self._job_locks.setdefault(name.lower(), Lock())
-
-    def _create_scheduler(self) -> Any:
-        from apscheduler.schedulers.background import BackgroundScheduler
-
-        return BackgroundScheduler(timezone=timezone.utc, job_defaults={"coalesce": True, "max_instances": 1})
+            self._job_locks.setdefault(name.lower(), asyncio.Lock())
 
     def _resolve_collectors(self) -> dict[str, BaseCollector]:
-        resolved: dict[str, BaseCollector] = dict(self.collectors)
-        if resolved:
-            return resolved
+        if self.collectors:
+            return self.collectors
 
         for collector_cls in discover_collectors():
-            collector_name = getattr(collector_cls, "name", None) or collector_cls.__name__
-            resolved[collector_name.lower()] = collector_cls()
-        return resolved
+            collector_name = (
+                getattr(collector_cls, "name", None) or collector_cls.__name__
+            )
+            self.collectors[collector_name.lower()] = collector_cls()
+        return self.collectors
 
     def _get_collector(self, collector_name: str) -> BaseCollector | None:
         normalized_name = collector_name.lower()
@@ -66,13 +66,9 @@ class SchedulerService:
             collector = registry_cls()
         return collector
 
-    def start(self) -> Any:
-        if self.scheduler is not None:
-            return self.scheduler
-
-        self.scheduler = self.scheduler_factory()
+    def start(self) -> None:
         self._logger.info(
-            "scheduler.started",
+            "scheduler.starting",
             enabled_collectors=list(self.settings.enabled_collectors),
             interval_minutes=self.settings.search_interval,
         )
@@ -81,69 +77,113 @@ class SchedulerService:
             normalized_name = str(collector_name).strip().lower()
             if not normalized_name:
                 continue
-            self._job_locks.setdefault(normalized_name, Lock())
-            self.scheduler.add_job(
+            self._job_locks.setdefault(normalized_name, asyncio.Lock())
+            self.schedule(
                 self._run_job_safe,
                 args=[normalized_name],
-                id=f"collector:{normalized_name}",
+                job_id=f"collector:{normalized_name}",
                 name=normalized_name,
                 trigger="interval",
                 minutes=self.settings.search_interval,
-                replace_existing=True,
-                coalesce=True,
-                max_instances=1,
             )
 
-        self.scheduler.start()
-        return self.scheduler
+        self.backend.start()
 
-    def shutdown(self, wait: bool = True) -> None:
-        if self.scheduler is None:
-            return
-        self.scheduler.shutdown(wait=wait)
-        self.scheduler = None
+    def stop(self, wait: bool = True) -> None:
+        self.backend.stop(wait=wait)
         self._logger.info("scheduler.stopped")
 
+    def shutdown(self, wait: bool = True) -> None:
+        """Alias for stop() for backward compatibility."""
+        self.stop(wait=wait)
+
+    def pause(self) -> None:
+        self.backend.pause()
+
+    def resume(self) -> None:
+        self.backend.resume()
+
     def status(self) -> dict[str, Any]:
-        scheduler_running = self.scheduler is not None and getattr(self.scheduler, "running", False)
+        backend_status = self.backend.status()
         return {
-            "running": scheduler_running,
+            "running": backend_status.get("running", False),
+            "backend": backend_status,
             "enabled_collectors": list(self.settings.enabled_collectors),
             "interval_minutes": self.settings.search_interval,
             "metrics_count": len(self.metrics),
             "latest_metrics": list(self.metrics[-3:]),
         }
 
-    def _run_job_safe(self, collector_name: str) -> dict[str, Any]:
+    def schedule(
+        self,
+        func: Callable[..., Any],
+        args: list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        *,
+        job_id: str | None = None,
+        name: str | None = None,
+        trigger: str = "interval",
+        **trigger_kwargs: Any,
+    ) -> str:
+        return self.backend.schedule(
+            func,
+            args=args,
+            kwargs=kwargs,
+            job_id=job_id,
+            name=name,
+            trigger=trigger,
+            **trigger_kwargs,
+        )
+
+    def cancel(self, job_id: str) -> bool:
+        return self.backend.cancel(job_id)
+
+    async def _run_job_safe(self, collector_name: str) -> dict[str, Any]:
         normalized_name = collector_name.lower()
-        lock = self._job_locks.setdefault(normalized_name, Lock())
-        if not lock.acquire(blocking=False):
-            self._logger.info("scheduler.job_skipped", collector=normalized_name, reason="already_running")
-            self._record_metric(normalized_name, "skipped", attempts=0, duration_seconds=0.0)
+        lock = self._job_locks.setdefault(normalized_name, asyncio.Lock())
+        if lock.locked():
+            self._logger.info(
+                "scheduler.job_skipped",
+                collector=normalized_name,
+                reason="already_running",
+            )
+            self._record_metric(
+                normalized_name, "skipped", attempts=0, duration_seconds=0.0
+            )
             return {"collector": normalized_name, "status": "skipped", "attempts": 0}
 
-        try:
-            return self._execute_collector(normalized_name)
-        finally:
-            lock.release()
+        async with lock:
+            async with self._semaphore:
+                return await self._execute_collector(normalized_name)
 
-    def run_job(self, collector_name: str) -> dict[str, Any]:
-        return self._run_job_safe(collector_name)
+    async def run_job(self, collector_name: str) -> dict[str, Any]:
+        return await self._run_job_safe(collector_name)
 
-    def _execute_collector(self, collector_name: str) -> dict[str, Any]:
+    async def _execute_collector(self, collector_name: str) -> dict[str, Any]:
         collector = self._get_collector(collector_name)
         if collector is None:
             error = f"Collector {collector_name} is not available"
-            self._logger.error("scheduler.job_failed", collector=collector_name, error=error)
-            self._record_metric(collector_name, "failed", attempts=1, duration_seconds=0.0, error=error)
-            return {"collector": collector_name, "status": "failed", "attempts": 1, "error": error}
+            self._logger.error(
+                "scheduler.job_failed", collector=collector_name, error=error
+            )
+            self._record_metric(
+                collector_name, "failed", attempts=1, duration_seconds=0.0, error=error
+            )
+            return {
+                "collector": collector_name,
+                "status": "failed",
+                "attempts": 1,
+                "error": error,
+            }
 
         started_at = time.perf_counter()
         last_error: Exception | None = None
         for attempt in range(1, self.retry_attempts + 1):
             try:
-                self._logger.info("scheduler.job_started", collector=collector_name, attempt=attempt)
-                collector.run(query="")
+                self._logger.info(
+                    "scheduler.job_started", collector=collector_name, attempt=attempt
+                )
+                await collector.run(query="")
                 duration_seconds = round(time.perf_counter() - started_at, 6)
                 self._logger.info(
                     "scheduler.job_succeeded",
@@ -151,8 +191,18 @@ class SchedulerService:
                     attempt=attempt,
                     duration_seconds=duration_seconds,
                 )
-                self._record_metric(collector_name, "success", attempts=attempt, duration_seconds=duration_seconds)
-                return {"collector": collector_name, "status": "success", "attempts": attempt, "duration_seconds": duration_seconds}
+                self._record_metric(
+                    collector_name,
+                    "success",
+                    attempts=attempt,
+                    duration_seconds=duration_seconds,
+                )
+                return {
+                    "collector": collector_name,
+                    "status": "success",
+                    "attempts": attempt,
+                    "duration_seconds": duration_seconds,
+                }
             except Exception as exc:  # pragma: no cover - exercised through retry loop
                 last_error = exc
                 if attempt >= self.retry_attempts:
@@ -165,13 +215,31 @@ class SchedulerService:
                     delay_seconds=delay_seconds,
                     error=str(exc),
                 )
-                time.sleep(delay_seconds)
+                await asyncio.sleep(delay_seconds)
 
         duration_seconds = round(time.perf_counter() - started_at, 6)
-        error = str(last_error) if last_error is not None else "Unknown collector failure"
-        self._logger.error("scheduler.job_failed", collector=collector_name, attempts=self.retry_attempts, error=error)
-        self._record_metric(collector_name, "failed", attempts=self.retry_attempts, duration_seconds=duration_seconds, error=error)
-        return {"collector": collector_name, "status": "failed", "attempts": self.retry_attempts, "error": error}
+        error = (
+            str(last_error) if last_error is not None else "Unknown collector failure"
+        )
+        self._logger.error(
+            "scheduler.job_failed",
+            collector=collector_name,
+            attempts=self.retry_attempts,
+            error=error,
+        )
+        self._record_metric(
+            collector_name,
+            "failed",
+            attempts=self.retry_attempts,
+            duration_seconds=duration_seconds,
+            error=error,
+        )
+        return {
+            "collector": collector_name,
+            "status": "failed",
+            "attempts": self.retry_attempts,
+            "error": error,
+        }
 
     def _record_metric(
         self,

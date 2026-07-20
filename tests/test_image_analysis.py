@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import MagicMock
 
 from analysis.ai_interfaces import AnalysisArtifacts, ListingContext
@@ -76,7 +75,9 @@ def test_pipeline_as_ai_plugin():
     pipeline = ImageAnalysisPipeline(ocr=mock_ocr)
 
     context = ListingContext(
-        raw_data={"image_urls": ["http://example.com/1.jpg", "http://example.com/2.jpg"]}
+        raw_data={
+            "image_urls": ["http://example.com/1.jpg", "http://example.com/2.jpg"]
+        }
     )
     artifacts = AnalysisArtifacts()
 

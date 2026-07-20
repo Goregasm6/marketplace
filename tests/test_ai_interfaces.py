@@ -1,10 +1,18 @@
-from analysis.ai_interfaces import AnalysisArtifacts, AIPlugin, ListingContext, PluginRegistry, run_plugins
+from analysis.ai_interfaces import (
+    AnalysisArtifacts,
+    AIPlugin,
+    ListingContext,
+    PluginRegistry,
+    run_plugins,
+)
 
 
 class EchoPlugin(AIPlugin):
     name = "echo"
 
-    def run(self, context: ListingContext, artifacts: AnalysisArtifacts) -> AnalysisArtifacts:
+    def run(
+        self, context: ListingContext, artifacts: AnalysisArtifacts
+    ) -> AnalysisArtifacts:
         artifacts.llm_summary = f"processed {context.title or 'listing'}"
         return artifacts
 

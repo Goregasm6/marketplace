@@ -6,6 +6,7 @@ from api.deps import get_plugin_registry
 
 router = APIRouter(prefix="/collectors", tags=["collectors"])
 
+
 @router.get("/", response_model=List[dict])
 def list_collectors(
     registry: PluginRegistry = Depends(get_plugin_registry),
@@ -13,6 +14,7 @@ def list_collectors(
     """Retrieve all available collectors."""
     collectors = registry.get_collectors()
     return [c.metadata for c in collectors]
+
 
 @router.get("/{name}", response_model=dict)
 def get_collector(
